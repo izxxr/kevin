@@ -1,0 +1,3 @@
+faster-whisper==1.2.*
+SpeechRecognition[faster-whisper]==3.14.*
+pyaudio==0.2.*
