@@ -15,6 +15,8 @@ if TYPE_CHECKING:
 
 __all__ = (
     "STTProvider",
+    "STTResult",
+    "FasterWhisperSTT",
 )
 
 
@@ -88,7 +90,7 @@ class FasterWhisperSTT(STTProvider):
 
         Note that ``model_size_or_path`` is ignored in these options. Use the first
         argument instead.
-    speech_thresh: :class:`bool`
+    no_speech_thresh: :class:`bool`
         The minimum threshold to classify a transcript as speech. This is used to
         set :attr:`STTResult.has_speech` attribute.
 
@@ -99,7 +101,7 @@ class FasterWhisperSTT(STTProvider):
     def __init__(
         self,
         model_size_or_path: str,
-        speech_thresh: float = 0.6,
+        no_speech_thresh: float = 0.5,
         whisper_model_options: dict[str, Any] | None = None,
     ):
         if whisper_model_options is None:
@@ -114,7 +116,7 @@ class FasterWhisperSTT(STTProvider):
         self.recognizer = fw_recognizer.WhisperCompatibleRecognizer(
             fw_recognizer.TranscribableAdapter(self.model)  # type: ignore
         )
-        self.speech_thresh = speech_thresh
+        self.no_speech_thresh = no_speech_thresh
 
     def transcribe(self, data: AudioData, assistant: Kevin) -> STTResult:
         """Transcribes the audio data.
@@ -131,6 +133,6 @@ class FasterWhisperSTT(STTProvider):
             raise TypeError(f"recognize() did not return a dictionary; got {type(transcript)}")
 
         result = STTResult(text=transcript.pop("text").strip(), state=transcript)
-        result.has_speech = any(s.speech_prob > self.speech_thresh for s in transcript["segments"])
+        result.has_speech = any(s.no_speech_prob < self.no_speech_thresh for s in transcript["segments"])
 
         return result

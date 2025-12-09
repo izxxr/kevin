@@ -27,7 +27,7 @@ class Kevin:
         Speech-to-text provider for transcribing commands and follow up
         instructions.
     hotword_stt: :class:`STTProvider` | None
-        Option speech-to-text provider to use for detecting hotword.
+        Optional speech-to-text provider to use for detecting hotword.
         
         Generally, it is recommended to provide a STT provider that uses a
         smaller ASR model than :attr:`.stt` because this provider will be actively
@@ -83,9 +83,12 @@ class Kevin:
         if not result.has_speech or not result.text:
             return
 
-        _log.debug(f"Speech received: {result.text!r}")
+        _log.info(f"Speech received: {result.text!r}")
 
-        if not awake and self.hotword_detect_func is not None:
+        if not awake:
+            if self.hotword_detect_func is None:
+                return
+
             if self.hotword_detect_func(result):
                 _log.info("Received hotword, waking up")
                 self.wake_up()
@@ -116,11 +119,11 @@ class Kevin:
                 return result.text.lower().startswith("hey kevin")
         """
         if func is not None:
-            self._hotword_detect_callback = func
+            self.hotword_detect_func = func
             return func
 
         def __wrapper(func: Callable[[STTResult], bool | None]):
-            self._hotword_detect_callback = func
+            self.hotword_detect_func = func
             return func
 
         return __wrapper
