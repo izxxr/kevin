@@ -8,8 +8,6 @@ from dataclasses import dataclass
 from speech_recognition.recognizers.whisper_local import faster_whisper as fw_recognizer
 from speech_recognition import AudioData
 
-import faster_whisper
-
 if TYPE_CHECKING:
     from kevin.assistant import Kevin
 
@@ -80,11 +78,14 @@ class STTProvider:
 class FasterWhisperSTT(STTProvider):
     """Speech recognition using the faster-whisper implementation.
 
+    This provider requires faster-whisper to be installed. 
+
     Parameters
     ----------
     model_size_or_path:
         The name or path of Whisper model to use. This argument is simply
-        equivalent to first argument of faster whisper model class.
+        equivalent to first argument of faster whisper model class. The model
+        will be downloaded if not already available.
     whisper_model_options: dict
         Additional keyword arguments for :class:`faster_whisper.WhisperModel`
 
@@ -104,6 +105,11 @@ class FasterWhisperSTT(STTProvider):
         no_speech_thresh: float = 0.5,
         whisper_model_options: dict[str, Any] | None = None,
     ):
+        try:
+            import faster_whisper
+        except Exception:
+            raise RuntimeError("FasterWhisperSTT requires faster-whisper to be installed")
+
         if whisper_model_options is None:
             whisper_model_options = {}
 
