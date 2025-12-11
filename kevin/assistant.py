@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Callable, Any, TYPE_CHECKING
+from typing import Callable, Any, Mapping, TYPE_CHECKING
+from types import MappingProxyType
 from kevin.data import Message, InferenceChatResponse
 from kevin.defs import DEFAULT_SYSTEM_PROMPT
 from kevin.tools import Tool
@@ -264,9 +265,31 @@ class Kevin:
             the same name as one already added.
         """
         if self._tools.get(tool.__tool_name__) is not None and not override:
-            raise RuntimeError(f"Tool with name {tool.__tool_name__!r} already registered")
+            raise ValueError(f"Tool with name {tool.__tool_name__!r} already registered")
 
         self._tools[tool.__tool_name__] = tool
+
+    def remove_tool(self, tool: type[Tool] | str, raise_error: bool = True) -> None:
+        """Removes an already registered tool.
+
+        Parameters
+        ----------
+        tool: type[:class:`Tool`]
+            The tool's name or the tool class.
+        raise_error: :class:`bool`
+            If true (default), raise an error if tool to be removed does not exist.
+        """
+        if not isinstance(tool, str):
+            tool = tool.__tool_name__
+
+        try:
+            self._tools.pop(tool)
+        except KeyError:
+            raise ValueError("Invalid tool name") from None
+
+    def tools(self) -> Mapping[str, type[Tool]]:
+        """Returns an immutable mapping of registered tools."""
+        return MappingProxyType(self._tools)
 
     # Awake state management
 
