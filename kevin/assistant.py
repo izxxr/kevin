@@ -137,7 +137,20 @@ class Kevin:
             tool_tp = self._tools[call.name]
             tool_tp(**call.arguments).callback(self)
 
-    def _process_command(self, command: str):
+    def process_command(self, command: str):
+        """Processes the given command.
+
+        This method processes the command through inference backend
+        and handles any tool calls in the response.
+
+        This API is only exposed for niche or complex cases and should
+        almost never be called manually.
+
+        Parameters
+        ----------
+        command: :class:`str`
+            The command to process.
+        """
         if not self.awake():
             self.wake_up()
 
