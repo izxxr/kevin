@@ -10,6 +10,7 @@ import speech_recognition as sr
 
 if TYPE_CHECKING:
     from kevin.stt import STTProvider, STTResult
+    from kevin.inference import InferenceBackend
 
 __all__ = (
     "Kevin",
@@ -50,36 +51,60 @@ class Kevin:
     sleep_on_done: bool
         Whether to sleep after command or action execution is done. This should
         generally never be set to false. Default is true.
+    text_mode: :class:`bool`
+        When enabled, the commands and responses are text based (standard I/O)
     """
 
     def __init__(
         self,
-        stt: STTProvider,
+        inference: InferenceBackend,
+        stt: STTProvider | None = None,
         hotword_stt: STTProvider | None = None,
         recognizer: sr.Recognizer | None = None,
         hotword_detect_func: Callable[[STTResult], bool | None] | None = None,
         sleep_on_done: bool = True,
+        text_mode: bool = False,
     ):
+        if not text_mode and stt is None:
+            raise TypeError("stt must be provided when text_mode=False")
+
         if recognizer is None:
             recognizer = sr.Recognizer()
 
         if hotword_stt is None:
             hotword_stt = stt
 
+        self.inference = inference
         self.stt = stt
         self.hotword_stt = hotword_stt
         self.recognizer = sr.Recognizer()
         self.hotword_detect_func = hotword_detect_func
         self.sleep_on_done = sleep_on_done
+        self.text_mode = text_mode
 
         self._awake = threading.Event()
         self._started = False
 
+    # command processing
+
+    def _process_command(self, command: str):
+        if not self.awake():
+            self.wake_up()
+
+        _log.info("Command: %r", command)
+
+        if self.sleep_on_done:
+            self.sleep()
+
+    # speech processing
+
     def _process_audio(self, data: sr.AudioData) -> None:
         awake = self.awake()
         stt = self.stt if awake else self.hotword_stt
-        result = stt.transcribe(data, self)
 
+        assert stt is not None
+
+        result = stt.transcribe(data, self)
         if not result.has_speech or not result.text:
             return
 
@@ -94,11 +119,6 @@ class Kevin:
                 self.wake_up()
 
             return
-
-        _log.info("Command: %r", result.text)
-
-        if self.sleep_on_done:
-            self.sleep()
 
     # Decorators
 
@@ -157,6 +177,21 @@ class Kevin:
 
     # Assistant started state
 
+    def _start_text_mode(self):
+        while self._started:
+            self._process_command(input("$$ > "))
+
+    def _start_speech_mode(self):
+        with sr.Microphone() as source:
+            _log.info(f"Calibrating recognizer for ambient noise from device {source.device_index}")
+            self.recognizer.adjust_for_ambient_noise(source)
+
+            try:
+                while self._started:
+                    self._process_audio(self.recognizer.listen(source))
+            except KeyboardInterrupt:
+                self.stop()
+
     def start(self, setup_logging: bool = True) -> None:
         """Starts the assistant.
 
@@ -178,15 +213,10 @@ class Kevin:
         _log.info("KEVIN is starting")
         self._started = True
 
-        with sr.Microphone() as source:
-            _log.info(f"Calibrating recognizer for ambient noise from device {source.device_index}")
-            self.recognizer.adjust_for_ambient_noise(source)
-
-            try:
-                while self._started:
-                    self._process_audio(self.recognizer.listen(source))
-            except KeyboardInterrupt:
-                self.stop()
+        if self.text_mode:
+            self._start_text_mode()
+        else:
+            self._start_speech_mode()
 
     def stop(self) -> None:
         """Stops the assistant.

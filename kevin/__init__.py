@@ -1,2 +1,6 @@
 from kevin.assistant import *
-from kevin import stt as stt
+from kevin import (
+    stt as stt,
+    inference as inference,
+    data as data,
+)
