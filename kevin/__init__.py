@@ -1,3 +1,9 @@
+"""
+KEVIN
+~~~~~
+
+Simple Python library for building AI personal assistant.
+"""
 from kevin.assistant import *
 from kevin import (
     stt as stt,
@@ -7,3 +13,6 @@ from kevin import (
     tools as tools,
     utils as utils,
 )
+
+__version__ = "0.1.0"
+__author__ = "Izhar Ahmad <izxxr>"
