@@ -4,9 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-import io
+import numpy as np
 import sounddevice as sd
-import soundfile as sf
 
 __all__ = (
     "TTSProvider",
@@ -53,6 +52,14 @@ class PiperTTS(TTSProvider):
         self.voice = PiperVoice.load(voice_path, **voice_options)
 
     def speak(self, text: str) -> None:
+        chunks = []
+        sample_rate = None
+
         for chunk in self.voice.synthesize(text):
-            sd.play(chunk.audio_float_array, chunk.sample_rate)
-            sd.wait()
+            sample_rate = chunk.sample_rate
+            chunks.append(chunk.audio_float_array)
+
+        audio = np.concatenate(chunks, axis=0)
+
+        sd.play(audio, sample_rate)
+        sd.wait()
