@@ -56,15 +56,21 @@ class Kevin:
         generally never be set to false. Default is true.
     text_mode: :class:`bool`
         When enabled, the commands and responses are text based (standard I/O)
-    system_prompt: :class:`str` | None
-        The system prompt passed with every command. If not provided, default system
-        prompt is used i.e. :data:`kevin.defs.DEFAULT_SYSTEM_PROMPT`
+    system_prompts: list[:class:`str`] | None
+        The system prompts to provide to language model.
+
+        If `include_default_prompt` is true (default), the default system prompt
+        (defined in `kevin.data.DEFAULT_SYSTEM_PROMPT`) will be included in the
+        set of system prompts.
+    include_default_prompt: :class:`bool`
+        Whether to include the default system prompt in given system prompts. Defaults
+        to true. If false, `assistant_name` and `user_name` are disregarded.
     assistant_name: :class:`str`
         The custom name of assistant. Defaults to KEVIN. This is only formatted into
-        default system prompt and disregarded when providing a custom ``system_prompt``.
+        default system prompt and disregarded when providing `include_default_prompt=False`.
     user_name: :class:`str`
         The name of user. Defaults to generic User. This is only formatted into
-        default system prompt and disregarded when providing a custom ``system_prompt``.
+        default system prompt and disregarded when providing `include_default_prompt=False`.
     """
 
     def __init__(
@@ -76,7 +82,8 @@ class Kevin:
         hotword_detect_func: Callable[[STTResult], bool | None] | None = None,
         sleep_on_done: bool = True,
         text_mode: bool = False,
-        system_prompt: str | None = None,
+        system_prompts: list[str] | None = None,
+        include_default_prompt: bool = True,
         assistant_name: str = "KEVIN",
         user_name: str = "<unnamed>"
     ):
@@ -89,6 +96,12 @@ class Kevin:
         if hotword_stt is None:
             hotword_stt = stt
 
+        if system_prompts is None:
+            system_prompts = []
+
+        if include_default_prompt:
+            system_prompts.insert(0, self._get_default_system_prompt(assistant_name, user_name))
+
         self.inference = inference
         self.stt = stt
         self.hotword_stt = hotword_stt
@@ -96,7 +109,7 @@ class Kevin:
         self.hotword_detect_func = hotword_detect_func
         self.sleep_on_done = sleep_on_done
         self.text_mode = text_mode
-        self.system_prompt = system_prompt if system_prompt else self._get_default_system_prompt(assistant_name, user_name)
+        self.system_prompts = [Message(role="system", content=prompt) for prompt in system_prompts]
 
         self._tools: dict[str, type[Tool]] = {}
         self._tools_data = None
@@ -105,7 +118,12 @@ class Kevin:
 
     # command processing
 
-    def _get_default_system_prompt(self, assistant_name: str, user_name: str):
+    def _get_messages(self, command: str):
+        copy = self.system_prompts.copy()
+        copy.append(Message(role="user", content=command))
+        return copy
+    
+    def _get_default_system_prompt(self, assistant_name: str, user_name: str) -> str:
         return DEFAULT_SYSTEM_PROMPT.format(assistant_name=assistant_name, user_name=user_name)
 
     def _get_tools_data(self) -> list[dict[str, Any]]:
@@ -126,10 +144,7 @@ class Kevin:
         _log.info("Command: %r", command)
 
         response = self.inference.chat(
-            messages=[
-                Message(role="system", content=self.system_prompt),
-                Message(role="user", content=command),
-            ],
+            messages=self._get_messages(command),
             tools_data=self._get_tools_data(),
         )
 
