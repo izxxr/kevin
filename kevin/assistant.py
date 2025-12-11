@@ -192,7 +192,7 @@ class Kevin:
 
             return
         
-        self._process_command(result.text)
+        self.process_command(result.text)
 
     # Decorators
 
@@ -299,7 +299,7 @@ class Kevin:
 
     def _start_text_mode(self):
         while self._started:
-            self._process_command(input("$$ > "))
+            self.process_command(input("$$ > "))
 
     def _start_speech_mode(self):
         with sr.Microphone() as source:
