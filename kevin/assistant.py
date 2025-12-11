@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Callable, Any, TYPE_CHECKING
 from kevin.data import Message, InferenceChatResponse
-from kevin.defs import DEFAULT_SYSTEM_PROMPT
+from kevin.defs import DEFAULT_SYSTEM_PROMPT, DEFAULT_VARIATION_SYSTEM_PROMPT
 from kevin.tools import Tool
 from kevin.utils.plugins import PluginsMixin
 
@@ -321,3 +321,44 @@ class Kevin(PluginsMixin):
 
         _log.info("KEVIN is stopping")
         self._started = False
+
+    # convenience methods
+
+    def generate_var(self, text: str, system_prompt: str | None = None) -> str:
+        """Generates a variation for the given text.
+
+        This method is useful in generating natural sounding responses
+        to commands.
+
+        Parameters
+        ----------
+        text: :class:`str`
+            The text to vary.
+        system_prompt: :class:`str` | None
+            The custom system prompt to give for guiding the model to vary
+            the text.
+
+        Returns
+        -------
+        :class:`str`
+            The varied text.
+        """
+        if system_prompt is None:
+            system_prompt = DEFAULT_VARIATION_SYSTEM_PROMPT.format(text=text)
+
+        response = self.inference.chat(messages=[
+            Message(role="system", content=system_prompt)
+        ])
+
+        if response.content is None:
+            raise TypeError("response was unexpectedly None")
+
+        return response.content
+
+    def speak_var(self, text: str) -> None:
+        """Shorthand to: ``assistant.tts.speak(assistant.generate_var(text))``"""
+        if self.tts is None:
+            raise TypeError("No TTS provider is set")
+
+        response = self.generate_var(text)
+        self.tts.speak(response)
