@@ -135,8 +135,12 @@ class Kevin:
     
     def _call_tools_from_response(self, response: InferenceChatResponse):
         for call in response.tool_calls:
-            tool_tp = self._tools[call.name]
-            tool_tp(**call.arguments).callback(self)
+            try:
+                tool_tp = self._tools[call.name]
+            except KeyError:
+                _log.warning("Inference response contains invalid tool name")
+            else:
+                tool_tp(**call.arguments).callback(self)
 
     def process_command(self, command: str):
         """Processes the given command.
