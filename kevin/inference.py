@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from typing import Any
+from kevin.tools import Tool
 from kevin.data import (
     Message,
-    Tool,
     ToolCall,
     InferenceChatResponse
 )
@@ -60,20 +60,52 @@ class InferenceBackend:
 
 
 class HuggingFaceInferenceBackend(InferenceBackend):
-    def __init__(self, client_options: dict[str, Any] | None = None) -> None:
+    """Inference backend based on :class:`huggingface_hub.InferenceClient`
+
+    `huggingface_hub` must be installed to use this backend.
+
+    .. info::
+
+        Common parameters such as model, provider, and token are provided however
+        for fine grained control, use the ``client_options`` parameter.
+
+    Parameters
+    ----------
+    model: :class:`str` | None
+        The model to use.
+    provider: :class:`str` | None
+        The inference provider to use.
+    token: :class:`str` | None
+        The hugging face authentication token.
+    client_options: :class:`str` | None
+        The options to pass to :class:`huggingface_hub.InferenceClient` in case
+        more granular control is needed of underlying client instance.
+    """
+    def __init__(
+        self,
+        model: str | None = None,
+        provider: str | None = None,
+        token: str | None = None,
+        client_options: dict[str, Any] | None = None
+    ):
         try:
             from huggingface_hub import InferenceClient
         except Exception:
             raise RuntimeError("huggingface_hub must be installed to use HuggingFaceInferenceBackend")
+        
+        options: dict[str, Any] = {
+            "model": model,
+            "provider": provider,
+            "token": token,
+        }
 
-        if client_options is None:
-            client_options = {}
+        if client_options is not None:
+            options.update(client_options)
 
-        self.client = InferenceClient(**client_options)
+        self.client = InferenceClient(**options)
 
     def _make_chat_response(self, data: Any) -> InferenceChatResponse:
         message = data.choices[0].message
-
         return InferenceChatResponse(
             content=message.content,
             tool_calls=[
@@ -81,7 +113,7 @@ class HuggingFaceInferenceBackend(InferenceBackend):
                     arguments=call.function.arguments,
                     name=call.function.name,
                 )
-                for call in message.tool_calls
+                for call in (message.tool_calls or [])
             ]
         )
 

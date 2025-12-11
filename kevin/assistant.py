@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Callable, TYPE_CHECKING
+from typing import Callable, Any, TYPE_CHECKING
+from kevin.data import Message, InferenceChatResponse
+from kevin.defs import DEFAULT_SYSTEM_PROMPT
+from kevin.tools import Tool
 
 import logging
 import threading
@@ -48,11 +51,20 @@ class Kevin:
 
         For a better interface, it is recommended to use :meth:`.hotword_detect`
         decorator in most cases unless an existing function is to be set.
-    sleep_on_done: bool
+    sleep_on_done: :class:`bool`
         Whether to sleep after command or action execution is done. This should
         generally never be set to false. Default is true.
     text_mode: :class:`bool`
         When enabled, the commands and responses are text based (standard I/O)
+    system_prompt: :class:`str` | None
+        The system prompt passed with every command. If not provided, default system
+        prompt is used i.e. :data:`kevin.defs.DEFAULT_SYSTEM_PROMPT`
+    assistant_name: :class:`str`
+        The custom name of assistant. Defaults to KEVIN. This is only formatted into
+        default system prompt and disregarded when providing a custom ``system_prompt``.
+    user_name: :class:`str`
+        The name of user. Defaults to generic User. This is only formatted into
+        default system prompt and disregarded when providing a custom ``system_prompt``.
     """
 
     def __init__(
@@ -64,6 +76,9 @@ class Kevin:
         hotword_detect_func: Callable[[STTResult], bool | None] | None = None,
         sleep_on_done: bool = True,
         text_mode: bool = False,
+        system_prompt: str | None = None,
+        assistant_name: str = "KEVIN",
+        user_name: str = "<unnamed>"
     ):
         if not text_mode and stt is None:
             raise TypeError("stt must be provided when text_mode=False")
@@ -81,17 +96,46 @@ class Kevin:
         self.hotword_detect_func = hotword_detect_func
         self.sleep_on_done = sleep_on_done
         self.text_mode = text_mode
+        self.system_prompt = system_prompt if system_prompt else self._get_default_system_prompt(assistant_name, user_name)
 
+        self._tools: dict[str, type[Tool]] = {}
+        self._tools_data = None
         self._awake = threading.Event()
         self._started = False
 
     # command processing
+
+    def _get_default_system_prompt(self, assistant_name: str, user_name: str):
+        return DEFAULT_SYSTEM_PROMPT.format(assistant_name=assistant_name, user_name=user_name)
+
+    def _get_tools_data(self) -> list[dict[str, Any]]:
+        if self._tools_data is None:
+            self._tools_data = [t.dump() for t in self._tools.values()]
+
+        return self._tools_data
+    
+    def _call_tools_from_response(self, response: InferenceChatResponse):
+        for call in response.tool_calls:
+            tool_tp = self._tools[call.name]
+            tool_tp(**call.arguments).callback(self)
 
     def _process_command(self, command: str):
         if not self.awake():
             self.wake_up()
 
         _log.info("Command: %r", command)
+
+        response = self.inference.chat(
+            messages=[
+                Message(role="system", content=self.system_prompt),
+                Message(role="user", content=command),
+            ],
+            tools_data=self._get_tools_data(),
+        )
+
+        _log.info("Response: %r", response.content)
+
+        self._call_tools_from_response(response)
 
         if self.sleep_on_done:
             self.sleep()
@@ -147,7 +191,53 @@ class Kevin:
             return func
 
         return __wrapper
-    
+
+    def tool(self, tool_tp: type[Tool] | None = None):
+        """Registers a decorated class as tool.
+
+        This is a decorator based interface for :meth:`.add_tool`. Example
+        usage::
+
+            @assistant.tool()
+            class CheckWeather(kevin.tools.Function):
+                '''Checks weather of the given location.'''
+                location: str
+
+                def callback(self, assistant):
+                    # ... some meaningful weather fetching code ...
+                    print(f"Weather at {self.location} is sunny")
+        """
+        if tool_tp is not None:
+            self.add_tool(tool_tp)
+            return tool_tp
+
+        def __wrapper(tool_tp: type[Tool]):
+            self.add_tool(tool_tp)
+            return tool_tp
+
+        return __wrapper
+
+    # Tools management
+
+    def add_tool(self, tool: type[Tool], override: bool = False) -> None:
+        """Registers a tool that can be called by the assistant.
+
+        Parameters
+        ----------
+        tool: type[:class:`Tool`]
+            The tool to add.
+        override: :class:`bool`
+            Whether to override the tool if an existing one is registered with the
+            same name. Defaults to False.
+
+            An error is raised if this is false and a tool is being added that has
+            the same name as one already added.
+        """
+        if self._tools.get(tool.__tool_name__) is not None and not override:
+            raise RuntimeError(f"Tool with name {tool.__tool_name__!r} already registered")
+
+        self._tools[tool.__tool_name__] = tool
+
     # Awake state management
 
     def awake(self) -> bool:
