@@ -13,7 +13,20 @@ __all__ = (
 
 
 class Function(Tool):
-    """Base class for all functions that a language model can call."""
+    """Base class for functions.
+
+    Functions are tools that can be called by language models. In simpler
+    words, these are actions that an assistant can perform such as checking
+    weather.
+
+    To define a function, :meth:`Assistant.tool` decorator is typically used
+    to decorate a class that inherits from this class.
+
+    All functions must define the :meth:`.callback` method and the parameters
+    are defined as attributes of this class. This class is a Pydantic model
+    so the attributes (parameters for function) support all of Pydantic field
+    validation features.
+    """
 
     __tool_type__ = "function"
 
