@@ -14,6 +14,7 @@ import speech_recognition as sr
 
 if TYPE_CHECKING:
     from kevin.stt import STTProvider, STTResult
+    from kevin.tts import TTSProvider
     from kevin.inference import InferenceBackend
 
 __all__ = (
@@ -39,6 +40,9 @@ class Kevin(PluginsMixin):
         transcribing in background.
 
         If this is not provided, :attr:`.stt` is used for hotword detection as well.
+    tts: :class:`TTSProvider`
+        The text-to-speech provider to use. If no provider is supplied, the responses
+        are only logged.
     recognizer: :class:`speech_recognition.Recognizer` | None
         The recognizer instance used for taking microphone input. This argument may
         be used for setting a recognizer with customized configuration.
@@ -80,6 +84,7 @@ class Kevin(PluginsMixin):
         stt: STTProvider | None = None,
         hotword_stt: STTProvider | None = None,
         recognizer: sr.Recognizer | None = None,
+        tts: TTSProvider | None = None,
         hotword_detect_func: Callable[[STTResult], bool | None] | None = None,
         sleep_on_done: bool = True,
         text_mode: bool = False,
@@ -107,6 +112,7 @@ class Kevin(PluginsMixin):
         self.stt = stt
         self.hotword_stt = hotword_stt
         self.recognizer = sr.Recognizer()
+        self.tts = tts
         self.hotword_detect_func = hotword_detect_func
         self.sleep_on_done = sleep_on_done
         self.text_mode = text_mode
@@ -171,6 +177,9 @@ class Kevin(PluginsMixin):
         _log.info("Response: %r", response.content)
 
         self._call_tools_from_response(response)
+
+        if response.content and self.tts:
+            self.tts.speak(response.content)
 
         if self.sleep_on_done:
             self.sleep()
