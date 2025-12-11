@@ -178,6 +178,8 @@ class Kevin:
                 self.wake_up()
 
             return
+        
+        self._process_command(result.text)
 
     # Decorators
 
