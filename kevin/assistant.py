@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Callable, Any, Mapping, TYPE_CHECKING
-from types import MappingProxyType
+from typing import Callable, Any, TYPE_CHECKING
 from kevin.data import Message, InferenceChatResponse
 from kevin.defs import DEFAULT_SYSTEM_PROMPT
 from kevin.tools import Tool
+from kevin.utils.plugins import PluginsMixin
 
 import logging
 import threading
@@ -23,7 +23,7 @@ __all__ = (
 _log = logging.getLogger(__name__)
 
 
-class Kevin:
+class Kevin(PluginsMixin):
     """Core class providing high level interface for assistant.
 
     Parameters
@@ -112,7 +112,9 @@ class Kevin:
         self.text_mode = text_mode
         self.system_prompts = [Message(role="system", content=prompt) for prompt in system_prompts]
 
-        self._tools: dict[str, type[Tool]] = {}
+        self._tools = {}
+        self._plugins = {}
+        self._name = "main"
         self._tools_data = None
         self._awake = threading.Event()
         self._started = False
@@ -226,74 +228,6 @@ class Kevin:
             return func
 
         return __wrapper
-
-    def tool(self, tool_tp: type[Tool] | None = None):
-        """Registers a decorated class as tool.
-
-        This is a decorator based interface for :meth:`.add_tool`. Example
-        usage::
-
-            @assistant.tool()
-            class CheckWeather(kevin.tools.Function):
-                '''Checks weather of the given location.'''
-                location: str
-
-                def callback(self, assistant):
-                    # ... some meaningful weather fetching code ...
-                    print(f"Weather at {self.location} is sunny")
-        """
-        if tool_tp is not None:
-            self.add_tool(tool_tp)
-            return tool_tp
-
-        def __wrapper(tool_tp: type[Tool]):
-            self.add_tool(tool_tp)
-            return tool_tp
-
-        return __wrapper
-
-    # Tools management
-
-    def add_tool(self, tool: type[Tool], override: bool = False) -> None:
-        """Registers a tool that can be called by the assistant.
-
-        Parameters
-        ----------
-        tool: type[:class:`Tool`]
-            The tool to add.
-        override: :class:`bool`
-            Whether to override the tool if an existing one is registered with the
-            same name. Defaults to False.
-
-            An error is raised if this is false and a tool is being added that has
-            the same name as one already added.
-        """
-        if self._tools.get(tool.__tool_name__) is not None and not override:
-            raise ValueError(f"Tool with name {tool.__tool_name__!r} already registered")
-
-        self._tools[tool.__tool_name__] = tool
-
-    def remove_tool(self, tool: type[Tool] | str, raise_error: bool = True) -> None:
-        """Removes an already registered tool.
-
-        Parameters
-        ----------
-        tool: type[:class:`Tool`]
-            The tool's name or the tool class.
-        raise_error: :class:`bool`
-            If true (default), raise an error if tool to be removed does not exist.
-        """
-        if not isinstance(tool, str):
-            tool = tool.__tool_name__
-
-        try:
-            self._tools.pop(tool)
-        except KeyError:
-            raise ValueError("Invalid tool name") from None
-
-    def tools(self) -> Mapping[str, type[Tool]]:
-        """Returns an immutable mapping of registered tools."""
-        return MappingProxyType(self._tools)
 
     # Awake state management
 

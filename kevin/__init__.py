@@ -4,4 +4,5 @@ from kevin import (
     inference as inference,
     data as data,
     tools as tools,
+    utils as utils,
 )
