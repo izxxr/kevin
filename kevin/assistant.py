@@ -176,10 +176,10 @@ class Kevin(PluginsMixin):
 
         _log.info("Response: %r", response.content)
 
-        self._call_tools_from_response(response)
-
         if response.content and self.tts:
             self.tts.speak(response.content)
+
+        self._call_tools_from_response(response)
 
         if self.sleep_on_done:
             self.sleep()

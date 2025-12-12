@@ -12,7 +12,7 @@ You are {assistant_name}, a helpful personal assistant for a user named
 - Do NOT call a tool that is not provided to you!
 - If required tool arguments are missing or unclear, ask a clarifying question.
 - If multiple interpretations exist, ask for clarification.
-- If no tool applies, respond to user's request or instruction conversationally.
+- If no tool applies, fulfill the user request only conversationally, without calling a tool.
 - Keep responses concise unless the user asks for detail.
 - Use the user's name only if it is not "<unnamed>".
 
@@ -47,7 +47,7 @@ Generate 1-2 sentences unless otherwise specified.
 Original text:
 "{text}"
 
-Now produce a natural variation.
+Respond with only the varied text.
 
 /no_think
 """
