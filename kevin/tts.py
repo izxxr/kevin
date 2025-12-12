@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+import threading
 import numpy as np
 import sounddevice as sd
 
@@ -19,13 +20,15 @@ class TTSProvider:
     be implemented using this class.
     """
 
-    def speak(self, text: str) -> None:
+    def speak(self, text: str, background: bool = True) -> None:
         """Synthesizes the provided text as speech and plays it.
 
         Parameters
         ----------
         text: :class:`str`
             The text to convert to speech.
+        background: :class:`bool`
+            Whether to speak in background. Defaults to true.
         """
 
 
@@ -51,15 +54,13 @@ class PiperTTS(TTSProvider):
 
         self.voice = PiperVoice.load(voice_path, **voice_options)
 
-    def speak(self, text: str) -> None:
-        chunks = []
-        sample_rate = None
-
+    def _speak_worker(self, text: str) -> None:
         for chunk in self.voice.synthesize(text):
-            sample_rate = chunk.sample_rate
-            chunks.append(chunk.audio_float_array)
+            sd.wait()
+            sd.play(chunk.audio_float_array, chunk.sample_rate)
 
-        audio = np.concatenate(chunks, axis=0)
-
-        sd.play(audio, sample_rate)
-        sd.wait()
+    def speak(self, text: str, background: bool = True) -> None:
+        if background:
+            threading.Thread(target=self._speak_worker, args=(text,), daemon=True).start()
+        else:
+            self._speak_worker(text)
