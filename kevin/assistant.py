@@ -10,6 +10,7 @@ from kevin.utils.plugins import PluginsMixin
 
 import logging
 import threading
+import collections
 import speech_recognition as sr
 
 if TYPE_CHECKING:
@@ -76,6 +77,9 @@ class Kevin(PluginsMixin):
     user_name: :class:`str`
         The name of user. Defaults to generic User. This is only formatted into
         default system prompt and disregarded when providing `include_default_prompt=False`.
+    max_history_messages: :class:`int`
+        The maximum messages to remember as history. This is exclusive of any system prompts and
+        only inclusive of the assistant/user messages. Default is 5.
     """
 
     def __init__(
@@ -91,7 +95,8 @@ class Kevin(PluginsMixin):
         system_prompts: list[str] | None = None,
         include_default_prompt: bool = True,
         assistant_name: str = "KEVIN",
-        user_name: str = "<unnamed>"
+        user_name: str = "<unnamed>",
+        max_history_messages: int = 5,
     ):
         if not text_mode and stt is None:
             raise TypeError("stt must be provided when text_mode=False")
@@ -124,14 +129,16 @@ class Kevin(PluginsMixin):
         self._tools_data = None
         self._awake = threading.Event()
         self._started = False
+        self._history = collections.deque[Message](maxlen=max_history_messages)
 
     # command processing
 
     def _get_messages(self, command: str):
         copy = self.system_prompts.copy()
+        copy.extend(self._history)
         copy.append(Message(role="user", content=command))
         return copy
-    
+ 
     def _get_default_system_prompt(self, assistant_name: str, user_name: str) -> str:
         return DEFAULT_SYSTEM_PROMPT.format(assistant_name=assistant_name, user_name=user_name)
 
@@ -178,6 +185,7 @@ class Kevin(PluginsMixin):
 
         if response.content and self.tts:
             self.tts.speak(response.content)
+            self._history.append(Message(role="assistant", content=response.content))
 
         self._call_tools_from_response(response)
 
