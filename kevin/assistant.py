@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import Callable, Any, TYPE_CHECKING
 from kevin.data import Message, InferenceChatResponse
 from kevin.defs import DEFAULT_SYSTEM_PROMPT, DEFAULT_VARIATION_SYSTEM_PROMPT
-from kevin.tools import Tool
 from kevin.utils.plugins import PluginsMixin
 
 import logging
@@ -374,3 +373,18 @@ class Kevin(PluginsMixin):
 
         response = self.generate_var(text)
         self.tts.speak(response)
+
+    # Chat history management
+
+    def purge_history(self) -> None:
+        """Clears the message history of assistant."""
+        self._history.clear()
+
+    def get_history(self) -> collections.deque[Message]:
+        """collections.deque object for assistant's messages history.
+
+        .. warning::
+
+            This returns the underlying history as-is instead of a copy.
+        """
+        return self._history
