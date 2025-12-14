@@ -134,9 +134,13 @@ class Kevin(PluginsMixin):
     # command processing
 
     def _get_messages(self, command: str):
+        msg = Message(role="user", content=command)
+        self._history.append(msg)
+
         copy = self.system_prompts.copy()
         copy.extend(self._history)
-        copy.append(Message(role="user", content=command))
+        copy.append(msg)
+
         return copy
  
     def _get_default_system_prompt(self, assistant_name: str, user_name: str) -> str:
