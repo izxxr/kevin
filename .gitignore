@@ -210,4 +210,8 @@ test.py
 .vscode/*
 
 plugins/
+
+.models/
 .voices/
+.porcupine/
+.playground/

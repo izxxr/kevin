@@ -49,6 +49,7 @@ class PiperTTS(TTSProvider):
             from piper import PiperVoice
         except Exception:
             raise RuntimeError("PiperTTS requires piper-tts to be installed")
+
         if voice_options is None:
             voice_options = {}
 

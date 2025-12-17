@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Callable, Any, TYPE_CHECKING
+from typing import Any, TYPE_CHECKING
 from kevin.data import Message, InferenceChatResponse
 from kevin.defs import DEFAULT_SYSTEM_PROMPT, DEFAULT_VARIATION_SYSTEM_PROMPT
 from kevin.utils.plugins import PluginsMixin
@@ -10,12 +10,14 @@ from kevin.utils.plugins import PluginsMixin
 import logging
 import threading
 import collections
+import sounddevice as sd
 import speech_recognition as sr
 
 if TYPE_CHECKING:
-    from kevin.stt import STTProvider, STTResult
+    from kevin.stt import STTProvider
     from kevin.tts import TTSProvider
     from kevin.inference import InferenceBackend
+    from kevin.hotwords import HotwordDetector
 
 __all__ = (
     "Kevin",
@@ -32,14 +34,6 @@ class Kevin(PluginsMixin):
     stt: :class:`STTProvider`
         Speech-to-text provider for transcribing commands and follow up
         instructions.
-    hotword_stt: :class:`STTProvider` | None
-        Optional speech-to-text provider to use for detecting hotword.
-        
-        Generally, it is recommended to provide a STT provider that uses a
-        smaller ASR model than :attr:`.stt` because this provider will be actively
-        transcribing in background.
-
-        If this is not provided, :attr:`.stt` is used for hotword detection as well.
     tts: :class:`TTSProvider`
         The text-to-speech provider to use. If no provider is supplied, the responses
         are only logged.
@@ -85,10 +79,9 @@ class Kevin(PluginsMixin):
         self,
         inference: InferenceBackend,
         stt: STTProvider | None = None,
-        hotword_stt: STTProvider | None = None,
         recognizer: sr.Recognizer | None = None,
         tts: TTSProvider | None = None,
-        hotword_detect_func: Callable[[STTResult], bool | None] | None = None,
+        hotword_detector: HotwordDetector | None = None,
         sleep_on_done: bool = True,
         text_mode: bool = False,
         system_prompts: list[str] | None = None,
@@ -103,9 +96,6 @@ class Kevin(PluginsMixin):
         if recognizer is None:
             recognizer = sr.Recognizer()
 
-        if hotword_stt is None:
-            hotword_stt = stt
-
         if system_prompts is None:
             system_prompts = []
 
@@ -114,10 +104,9 @@ class Kevin(PluginsMixin):
 
         self.inference = inference
         self.stt = stt
-        self.hotword_stt = hotword_stt
         self.recognizer = sr.Recognizer()
         self.tts = tts
-        self.hotword_detect_func = hotword_detect_func
+        self.hotword_detector = hotword_detector
         self.sleep_on_done = sleep_on_done
         self.text_mode = text_mode
         self.system_prompts = [Message(role="system", content=prompt) for prompt in system_prompts]
@@ -198,9 +187,10 @@ class Kevin(PluginsMixin):
     # speech processing
 
     def _process_audio(self, data: sr.AudioData) -> None:
-        awake = self.awake()
-        stt = self.stt if awake else self.hotword_stt
+        if not self.awake():
+            return
 
+        stt = self.stt
         assert stt is not None
 
         result = stt.transcribe(data, self)
@@ -208,46 +198,32 @@ class Kevin(PluginsMixin):
             return
 
         _log.info(f"Speech received: {result.text!r}")
-
-        if not awake:
-            if self.hotword_detect_func is None:
-                return
-
-            if self.hotword_detect_func(result):
-                _log.info("Received hotword, waking up")
-                self.wake_up()
-
-            return
-        
         self.process_command(result.text)
 
-    # Decorators
+    def _wake_assistant(self) -> None:
+        if self.hotword_detector is None:
+            return
 
-    def hotword_detect(self, func: Callable[[STTResult], bool | None] | None = None):
-        """Sets the hotword detection function.
+        spec = self.hotword_detector.get_audio_spec()
 
-        The passed function should take one parameter, the :class:`STTResult`
-        instance returned by :meth:`STTProvider.transcribe`.
+        with sd.InputStream(
+            samplerate=spec.sample_rate,
+            blocksize=spec.frame_size,
+            dtype=spec.dtype,
+            channels=spec.channels,
+        ) as stream:
+            while not self.awake():
+                data, _ = stream.read(spec.frame_size)
 
-        This can either be called directly to set a function e.g.::
+                if self.hotword_detector.process(data):
+                    _log.info("Waking up...")
+                    self.wake_up()
 
-            assistant.hotword_detect(func)
-
-        ... or this method can be used as a decorator::
-
-            @assistant.hotword_detect
-            def func(result):
-                return result.text.lower().startswith("hey kevin")
-        """
-        if func is not None:
-            self.hotword_detect_func = func
-            return func
-
-        def __wrapper(func: Callable[[STTResult], bool | None]):
-            self.hotword_detect_func = func
-            return func
-
-        return __wrapper
+    def _listen_speech(self, source: sr.AudioSource) -> None:
+        if not self.awake() and self.hotword_detector is not None:
+            self._wake_assistant()
+        else:
+            self._process_audio(self.recognizer.listen(source))
 
     # Awake state management
 
@@ -289,7 +265,7 @@ class Kevin(PluginsMixin):
 
             try:
                 while self._started:
-                    self._process_audio(self.recognizer.listen(source))
+                    self._listen_speech(source)
             except KeyboardInterrupt:
                 self.stop()
 

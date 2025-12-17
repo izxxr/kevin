@@ -12,6 +12,7 @@ from kevin import (
     data as data,
     tools as tools,
     utils as utils,
+    hotwords as hotwords,
 )
 
 __version__ = "0.1.0"
