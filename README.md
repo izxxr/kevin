@@ -16,14 +16,34 @@
 - Plugins support for modularized tools definitions
 - Type annotated and well documented API
 
-## Documentation
-Common patterns and usage examples are documented in [project wiki](https://github.com/izxxr/kevin/wiki). There is no API reference
-available at the moment however all functions and classes are well documented in the code. Quickstart code is shown below.
+## Installation
+Kevin can be installed using pip. It is not currently available on PyPi and has to be installed through Git:
 
-## Example Usage
-Below is the example quickstart code.
+```sh
+pip install "kevin[default] @ git+https://github.com/izxxr/kevin.git"
+```
 
-**This code has various dependencies before it can be run. Please refer to wiki for detailed quickstart guide and explanation of the code.**
+We are including `default` dependencies that installs the libraries required for using
+the built-in providers including:
+
+- `faster-whisper` and `SpeechRecognition` for speech recognition
+- `piper-tts` for text to speech
+- `huggingface_hub` for LLM response generation
+- `pvporcupine` for wake word detection.
+
+## Quickstart
+
+### Hugging Face API Key
+Kevin provides built-in support for [Hugging Face Inference Client](https://huggingface.co/docs/huggingface_hub/en/package_reference/inference_client) which allows accessing models and generating responses from LLMs.
+
+In order to use the inference client, API key is required. Create an account on
+[Hugging Face](https://huggingface.co) and navigate to https://huggingface.co/settings/tokens/new?tokenType=fineGrained
+
+Tick **"Make calls to Inference Providers"** checkbox and create the token. Copy the access token and store
+it somewhere safe.
+
+### Usage
+Below is the example quickstart code with basic functionality of Google lookup.
 
 ```python
 import kevin
@@ -31,16 +51,10 @@ import webbrowser  # for looking up on Google
 
 inference = kevin.inference.HuggingFaceInferenceBackend(
   "Qwen/Qwen3-4B-Instruct-2507",  # recommended model for most use cases
-  token="<hugging-face-api-key>"  # put hugging face API key here
-)
-stt = kevin.stt.FasterWhisperSTT("tiny.en")
-tts = kevin.tts.PiperTTS("<path-to-voice>")  # put path to downloaded Piper voice here
-hotword_detector = kevin.hotwords.PorcupineHotwordDetector(
-  access_key="<porcupine-access-key>",  # put porcupine access key here
-  keywords=["hey siri"]  # default wake word provided by porcupine, use keyword_paths for custom keywords
+  token="<hugging-face-access-token>"  # put generated hugging face access token here
 )
 
-assistant = kevin.Kevin(inference=inference, stt=stt, tts=tts, hotword_detector=hotword_detector)
+assistant = kevin.Kevin(inference=inference)
 
 # Tool is an action that assistant can perform. The class docstring is the description of
 # tool that assistant uses to understand when to call the tool. 'topic' is a string parameter
@@ -54,7 +68,18 @@ class LookupGoogle(kevin.tools.Function):
 
     def callback(self, ast):
         webbrowser.open(f"https://google.com/search?q={self.topic}")
+
+assistant.start()
 ```
+
+### Inference Backend and LLMs
+`HuggingFaceInferenceBackend` interacts with the hugging face inference API for generating LLM responses.
+
+You may use any LLM of your choice, but **it must support [tools and function calling](https://huggingface.co/docs/hugs/main/en/guides/function-calling). [`Qwen/Qwen3-4B-Instruct-2507`](https://huggingface.co/Qwen/Qwen3-4B-Instruct-2507) is extremely reliable for most tasks and [`SmolLM3-3B`](https://huggingface.co/HuggingFaceTB/SmolLM3-3B) is good for smaller tasks or testing purposes.
+
+## Documentation
+Common patterns and usage examples are documented in [project wiki](https://github.com/izxxr/kevin/wiki). There is
+no API reference available at the moment however all functions and classes are well documented in the code. Quickstart code is shown below.
 
 ## Extending for Other Use Cases
 While Kevin was primarily intended and tailored for my own personal use case, it is purely written with generality and flexibility in mind
