@@ -99,7 +99,7 @@ class Kevin(PluginsMixin):
         if recognizer is None:
             recognizer = sr.Recognizer()
 
-            if self.listen_timeout is not None:
+            if listen_timeout is not None:
                 # This is usually needed for listen_timeout to work properly.
                 recognizer.dynamic_energy_threshold = False
 
