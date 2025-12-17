@@ -72,22 +72,28 @@ class LookupGoogle(kevin.tools.Function):
 assistant.start()
 ```
 
+Run the code and try prompt such as "what are volcanoes?" or "look up benefits of apples."
+
 ### Inference Backend and LLMs
 `HuggingFaceInferenceBackend` interacts with the hugging face inference API for generating LLM responses.
 
 You may use any LLM of your choice, but **it must support [tools and function calling](https://huggingface.co/docs/hugs/main/en/guides/function-calling). [`Qwen/Qwen3-4B-Instruct-2507`](https://huggingface.co/Qwen/Qwen3-4B-Instruct-2507) is extremely reliable for most tasks and [`SmolLM3-3B`](https://huggingface.co/HuggingFaceTB/SmolLM3-3B) is good for smaller tasks or testing purposes.
 
+### Speech Recognition and Speaking Assistants
+The example shown above is a text mode based assistant. For integrating speech recognition for prompts and
+text to speech for assistant's responses, see `stt`, `hotword_detector`, and `tts` parameters details in
+`kevin.Kevin()` docstring.
+
 ## Documentation
-Common patterns and usage examples are documented in [project wiki](https://github.com/izxxr/kevin/wiki). There is
-no API reference available at the moment however all functions and classes are well documented in the code. Quickstart code is shown below.
+There is no API reference available at the moment however all functions and classes are well documented in
+the code.
 
 ## Extending for Other Use Cases
 While Kevin was primarily intended and tailored for my own personal use case, it is purely written with generality and flexibility in mind
 to adapt maximally to most other use cases.
 
 Although the built-in support is currently limited to specific providers such as FasterWhisper for STT and Piper for TTS etc., abstract
-interfaces are available (and well documented) to integrate any other third party provider. Please refer to wiki for details and examples
-of extending various abstract classes.
+interfaces are available (and well documented) to integrate any other third party provider.
 
 Feel free to suggest other providers that should be added through issues or even contributing an implementation. See [Contributing](#contributing) section.
 
