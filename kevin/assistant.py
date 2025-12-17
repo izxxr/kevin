@@ -33,7 +33,8 @@ class Kevin(PluginsMixin):
     ----------
     stt: :class:`STTProvider`
         Speech-to-text provider for transcribing commands and follow up
-        instructions.
+        instructions. If not provided, text mode is enabled and prompts
+        are given through standard input.
     tts: :class:`TTSProvider`
         The text-to-speech provider to use. If no provider is supplied, the responses
         are only logged.
@@ -53,8 +54,6 @@ class Kevin(PluginsMixin):
     sleep_on_done: :class:`bool`
         Whether to sleep after command or action execution is done. This should
         generally never be set to false. Default is true.
-    text_mode: :class:`bool`
-        When enabled, the commands and responses are text based (standard I/O)
     system_prompts: list[:class:`str`] | None
         The system prompts to provide to language model.
 
@@ -83,15 +82,15 @@ class Kevin(PluginsMixin):
         tts: TTSProvider | None = None,
         hotword_detector: HotwordDetector | None = None,
         sleep_on_done: bool = True,
-        text_mode: bool = False,
         system_prompts: list[str] | None = None,
         include_default_prompt: bool = True,
         assistant_name: str = "KEVIN",
         user_name: str = "<unnamed>",
         max_history_messages: int = 5,
     ):
-        if not text_mode and stt is None:
-            raise TypeError("stt must be provided when text_mode=False")
+        # TODO: add support for other wake-up mechanisms e.g. push-to-talk
+        if stt is not None and hotword_detector is None:
+            raise TypeError("hotword_detector must be provider if stt is set")
 
         if recognizer is None:
             recognizer = sr.Recognizer()
@@ -108,7 +107,8 @@ class Kevin(PluginsMixin):
         self.tts = tts
         self.hotword_detector = hotword_detector
         self.sleep_on_done = sleep_on_done
-        self.text_mode = text_mode
+        self.text_input_mode = stt is None
+        self.text_output_mode = tts is None
         self.system_prompts = [Message(role="system", content=prompt) for prompt in system_prompts]
 
         self._tools = {}
@@ -186,14 +186,12 @@ class Kevin(PluginsMixin):
 
     # speech processing
 
-    def _process_audio(self, data: sr.AudioData) -> None:
-        if not self.awake():
+    def _listen_command(self, data: sr.AudioData) -> None:
+        if self.stt is None or not self.awake():
             return
 
-        stt = self.stt
-        assert stt is not None
+        result = self.stt.transcribe(data, self)
 
-        result = stt.transcribe(data, self)
         if not result.has_speech or not result.text:
             return
 
@@ -216,14 +214,15 @@ class Kevin(PluginsMixin):
                 data, _ = stream.read(spec.frame_size)
 
                 if self.hotword_detector.process(data):
-                    _log.info("Waking up...")
                     self.wake_up()
+                    self.hotword_detector.reset()
+                    _log.info("Hotword detected. Assistant has been woke up.")
 
     def _listen_speech(self, source: sr.AudioSource) -> None:
         if not self.awake() and self.hotword_detector is not None:
             self._wake_assistant()
         else:
-            self._process_audio(self.recognizer.listen(source))
+            self._listen_command(self.recognizer.listen(source))
 
     # Awake state management
 
@@ -290,7 +289,7 @@ class Kevin(PluginsMixin):
         _log.info("KEVIN is starting")
         self._started = True
 
-        if self.text_mode:
+        if self.text_input_mode:
             self._start_text_mode()
         else:
             self._start_speech_mode()
