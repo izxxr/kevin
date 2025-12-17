@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import Any, Sequence, TYPE_CHECKING
 
 import dataclasses
-import pyaudio as pa
 import numpy as np
 
 __all__ = (

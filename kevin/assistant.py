@@ -72,6 +72,9 @@ class Kevin(PluginsMixin):
     max_history_messages: :class:`int`
         The maximum messages to remember as history. This is exclusive of any system prompts and
         only inclusive of the assistant/user messages. Default is 5.
+    listen_timeout: :class:`float`
+        The number of seconds to wait before sleeping if no speech is detected after hotword. Defaults
+        to 10 seconds. Setting this to None removes timeout.
     """
 
     def __init__(
@@ -87,6 +90,7 @@ class Kevin(PluginsMixin):
         assistant_name: str = "KEVIN",
         user_name: str = "<unnamed>",
         max_history_messages: int = 5,
+        listen_timeout: float | None = 5.0,
     ):
         # TODO: add support for other wake-up mechanisms e.g. push-to-talk
         if stt is not None and hotword_detector is None:
@@ -109,6 +113,7 @@ class Kevin(PluginsMixin):
         self.sleep_on_done = sleep_on_done
         self.text_input_mode = stt is None
         self.text_output_mode = tts is None
+        self.listen_timeout = listen_timeout
         self.system_prompts = [Message(role="system", content=prompt) for prompt in system_prompts]
 
         self._tools = {}
@@ -186,7 +191,7 @@ class Kevin(PluginsMixin):
 
     # speech processing
 
-    def _listen_command(self, data: sr.AudioData) -> None:
+    def _process_speech(self, data: sr.AudioData) -> None:
         if self.stt is None or not self.awake():
             return
 
@@ -216,13 +221,17 @@ class Kevin(PluginsMixin):
                 if self.hotword_detector.process(data):
                     self.wake_up()
                     self.hotword_detector.reset()
-                    _log.info("Hotword detected. Assistant has been woke up.")
 
     def _listen_speech(self, source: sr.AudioSource) -> None:
         if not self.awake() and self.hotword_detector is not None:
             self._wake_assistant()
         else:
-            self._listen_command(self.recognizer.listen(source))
+            try:
+                speech = self.recognizer.listen(source, timeout=self.listen_timeout)
+            except sr.WaitTimeoutError:
+                self.sleep()
+            else:
+                self._process_speech(speech)
 
     # Awake state management
 
@@ -232,10 +241,12 @@ class Kevin(PluginsMixin):
     
     def wake_up(self):
         """Wakes up the assistant."""
+        _log.info("Waking up assistant.")
         self._awake.set()
 
     def sleep(self):
         """Puts the model into sleep state."""
+        _log.info("Assistant going to sleep.")
         self._awake.clear()
 
     def wait_until_awake(self, timeout: float | None = None):

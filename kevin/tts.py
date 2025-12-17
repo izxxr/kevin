@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import Any
 
 import threading
-import numpy as np
 import sounddevice as sd
 
 __all__ = (
