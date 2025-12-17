@@ -99,6 +99,10 @@ class Kevin(PluginsMixin):
         if recognizer is None:
             recognizer = sr.Recognizer()
 
+            if self.listen_timeout is not None:
+                # This is usually needed for listen_timeout to work properly.
+                recognizer.dynamic_energy_threshold = False
+
         if system_prompts is None:
             system_prompts = []
 
@@ -107,7 +111,7 @@ class Kevin(PluginsMixin):
 
         self.inference = inference
         self.stt = stt
-        self.recognizer = sr.Recognizer()
+        self.recognizer = recognizer
         self.tts = tts
         self.hotword_detector = hotword_detector
         self.sleep_on_done = sleep_on_done
