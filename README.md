@@ -81,8 +81,7 @@ You may use any LLM of your choice, but **it must support [tools and function ca
 
 ### Speech Recognition and Speaking Assistants
 The example shown above is a text mode based assistant. For integrating speech recognition for prompts and
-text to speech for assistant's responses, see `stt`, `hotword_detector`, and `tts` parameters details in
-`kevin.Kevin()` docstring.
+text to speech for assistant's responses, see [this wiki page](https://github.com/izxxr/kevin/wiki/Setting-up-STT-TTS).
 
 ## Documentation
 There is no API reference available at the moment however all functions and classes are well documented in
