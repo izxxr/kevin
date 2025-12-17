@@ -77,7 +77,7 @@ Run the code and try prompt such as "what are volcanoes?" or "look up benefits o
 ### Inference Backend and LLMs
 `HuggingFaceInferenceBackend` interacts with the hugging face inference API for generating LLM responses.
 
-You may use any LLM of your choice, but **it must support [tools and function calling](https://huggingface.co/docs/hugs/main/en/guides/function-calling). [`Qwen/Qwen3-4B-Instruct-2507`](https://huggingface.co/Qwen/Qwen3-4B-Instruct-2507) is extremely reliable for most tasks and [`SmolLM3-3B`](https://huggingface.co/HuggingFaceTB/SmolLM3-3B) is good for smaller tasks or testing purposes.
+You may use any LLM of your choice, but **it must support [tools and function calling](https://huggingface.co/docs/hugs/main/en/guides/function-calling)**. [`Qwen/Qwen3-4B-Instruct-2507`](https://huggingface.co/Qwen/Qwen3-4B-Instruct-2507) is extremely reliable for most tasks and [`SmolLM3-3B`](https://huggingface.co/HuggingFaceTB/SmolLM3-3B) is good for smaller tasks or testing purposes.
 
 ### Speech Recognition and Speaking Assistants
 The example shown above is a text mode based assistant. For integrating speech recognition for prompts and
