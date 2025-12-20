@@ -19,6 +19,14 @@ class TTSProvider:
     be implemented using this class.
     """
 
+    def is_speaking(self) -> bool:
+        """Indicates if TTS provider is currently processing a text.
+
+        This is used by assistant for pausing the no speech timeout while
+        assistant is speaking allowing the user to listen to assistant.
+        """
+        raise NotImplementedError
+
     def speak(self, text: str, background: bool = True) -> None:
         """Synthesizes the provided text as speech and plays it.
 
@@ -29,6 +37,7 @@ class TTSProvider:
         background: :class:`bool`
             Whether to speak in background. Defaults to true.
         """
+        raise NotImplementedError
 
 
 class PiperTTS(TTSProvider):
@@ -53,11 +62,29 @@ class PiperTTS(TTSProvider):
             voice_options = {}
 
         self.voice = PiperVoice.load(voice_path, **voice_options)
+        self._lock = threading.Lock()
+        self._speeches = 0
+
+    def _signal_speech_start(self) -> None:
+        with self._lock:
+            self._speeches += 1
+
+    def _signal_speech_end(self) -> None:
+        with self._lock:
+            self._speeches -= 1
 
     def _speak_worker(self, text: str) -> None:
+        self._signal_speech_start()
+
         for chunk in self.voice.synthesize(text):
             sd.wait()
             sd.play(chunk.audio_float_array, chunk.sample_rate)
+
+        sd.wait()
+        self._signal_speech_end()
+
+    def is_speaking(self) -> bool:
+        return self._speeches > 0
 
     def speak(self, text: str, background: bool = True) -> None:
         if background:

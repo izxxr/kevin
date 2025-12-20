@@ -51,9 +51,6 @@ class Kevin(PluginsMixin):
 
         For a better interface, it is recommended to use :meth:`.hotword_detect`
         decorator in most cases unless an existing function is to be set.
-    sleep_on_done: :class:`bool`
-        Whether to sleep after command or action execution is done. This should
-        generally never be set to false. Default is true.
     system_prompts: list[:class:`str`] | None
         The system prompts to provide to language model.
 
@@ -84,7 +81,6 @@ class Kevin(PluginsMixin):
         recognizer: sr.Recognizer | None = None,
         tts: TTSProvider | None = None,
         hotword_detector: HotwordDetector | None = None,
-        sleep_on_done: bool = True,
         system_prompts: list[str] | None = None,
         include_default_prompt: bool = True,
         assistant_name: str = "KEVIN",
@@ -114,7 +110,6 @@ class Kevin(PluginsMixin):
         self.recognizer = recognizer
         self.tts = tts
         self.hotword_detector = hotword_detector
-        self.sleep_on_done = sleep_on_done
         self.text_input_mode = stt is None
         self.text_output_mode = tts is None
         self.listen_timeout = listen_timeout
@@ -190,9 +185,6 @@ class Kevin(PluginsMixin):
 
         self._call_tools_from_response(response)
 
-        if self.sleep_on_done:
-            self.sleep()
-
     # speech processing
 
     def _process_speech(self, data: sr.AudioData) -> None:
@@ -228,14 +220,22 @@ class Kevin(PluginsMixin):
 
     def _listen_speech(self, source: sr.AudioSource) -> None:
         if not self.awake() and self.hotword_detector is not None:
-            self._wake_assistant()
+            return self._wake_assistant()
+
+        was_speaking = self.tts and self.tts.is_speaking()
+
+        try:
+            speech = self.recognizer.listen(source, timeout=self.listen_timeout)
+        except sr.WaitTimeoutError:
+            # if assistant was speaking when listen() was called or is still
+            # speaking, ignore listen_timeout to prevent assistant from
+            # sleeping while user is listening to a response.
+            if was_speaking or (self.tts and self.tts.is_speaking()):
+                return
+
+            self.sleep()
         else:
-            try:
-                speech = self.recognizer.listen(source, timeout=self.listen_timeout)
-            except sr.WaitTimeoutError:
-                self.sleep()
-            else:
-                self._process_speech(speech)
+            self._process_speech(speech)
 
     # Awake state management
 
