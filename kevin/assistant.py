@@ -190,6 +190,19 @@ class Kevin(PluginsMixin):
 
         self._call_tools_from_response(response)
 
+        # XXX: Currently, the assistant immediately sleeps after processing the command.
+        # Behavior to wait for a follow up is easy to implement. However, that involves
+        # not sleeping after processing the command i.e. assistant is still listening.
+        # This leads to echo of assistant response being recognized as speech essentially
+        # leading to self talking loop. One possible approach is to pause STT while assistant
+        # is speaking and keeping hotword detector active. Once hotword is detected, stop the
+        # TTS (silence assistant) and move to normal listen-process cycle. However, this solution
+        # is slightly hacky and importantly, requires adjusting recognizer and hotword detector
+        # to be able to recognize the hotword while assistant voice's noise is present in
+        # background. Further more (TODO) TTSProvider currently does not provider a proper
+        # 'silencing' interface. I would rather prefer implementing that first.
+        # For now, we are limited to require repeated wake up calls until a feasible solution
+        # is available.
         if self.sleep_on_done:
             self.sleep()
 
