@@ -43,6 +43,11 @@ class Kevin(PluginsMixin):
         be used for setting a recognizer with customized configuration.
 
         If not provided, the default recognizer is used with suitable options.
+    microphone: :class:`speech_recognition.Microphone` | None
+        The microphone to take speech input from. This can be provided if a specific
+        audio input device is to be used.
+
+        If not provided, the default microphone is used.
     hotword_detect_func:
         Function called on speech when assistant is asleep to detect a hotword.
 
@@ -82,6 +87,7 @@ class Kevin(PluginsMixin):
         inference: InferenceBackend,
         stt: STTProvider | None = None,
         recognizer: sr.Recognizer | None = None,
+        microphone: sr.Microphone | None = None,
         tts: TTSProvider | None = None,
         hotword_detector: HotwordDetector | None = None,
         sleep_on_done: bool = True,
@@ -112,6 +118,7 @@ class Kevin(PluginsMixin):
         self.inference = inference
         self.stt = stt
         self.recognizer = recognizer
+        self.microphone = microphone if microphone is not None else sr.Microphone()
         self.tts = tts
         self.hotword_detector = hotword_detector
         self.sleep_on_done = sleep_on_done
@@ -228,6 +235,7 @@ class Kevin(PluginsMixin):
             blocksize=spec.frame_size,
             dtype=spec.dtype,
             channels=spec.channels,
+            device=self.microphone.device_index,
         ) as stream:
             while not self.awake():
                 data, _ = stream.read(spec.frame_size)
@@ -313,7 +321,7 @@ class Kevin(PluginsMixin):
             self._read_input()
 
     def _start_speech_mode(self):
-        with sr.Microphone() as source:
+        with self.microphone as source:
             _log.info(f"Calibrating recognizer for ambient noise from device {source.device_index}")
             self.recognizer.adjust_for_ambient_noise(source)
 
