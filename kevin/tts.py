@@ -20,7 +20,7 @@ class TTSProvider:
     """
 
     def is_speaking(self) -> bool:
-        """Indicates if a speech synthesis is going on."""
+        """Indicates if a speech is being synthesized or scheduled for synthesis."""
         raise NotImplementedError
 
     def speak(self, text: str, background: bool = True) -> None:
@@ -74,8 +74,11 @@ class PiperTTS(TTSProvider):
         self.voice = PiperVoice.load(voice_path, **voice_options)
         self._lock = threading.Lock()
         self._stopper = threading.Event()
+        self._speeches = 0
 
     def _speak_worker(self, text: str) -> None:
+        self._speeches += 1
+
         with self._lock:
             self._stopper.clear()
 
@@ -85,6 +88,8 @@ class PiperTTS(TTSProvider):
 
                 sd.wait()
                 sd.play(chunk.audio_float_array, samplerate=chunk.sample_rate)
+
+            self._speeches -= 1
 
     def speak(self, text: str, background: bool = True) -> None:
         if background:
@@ -101,4 +106,4 @@ class PiperTTS(TTSProvider):
         sd.stop()
 
     def is_speaking(self) -> bool:
-        return self._lock.locked()
+        return self._speeches > 0
