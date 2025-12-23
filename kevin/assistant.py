@@ -194,6 +194,20 @@ class Kevin(PluginsMixin):
 
         self._call_tools_from_response(response)
 
+    # speech processing
+
+    def _process_speech(self, data: sr.AudioData) -> None:
+        if self.stt is None or not self.awake():
+            return
+
+        result = self.stt.transcribe(data, self)
+
+        if not result.has_speech or not result.text:
+            return
+
+        _log.info(f"Speech received: {result.text!r}")
+        self.process_command(result.text)
+
         # XXX: Currently, the assistant immediately sleeps after processing the command.
         # Behavior to wait for a follow up is easy to implement. However, that involves
         # not sleeping after processing the command i.e. assistant is still listening.
@@ -209,20 +223,6 @@ class Kevin(PluginsMixin):
         # is available.
         if self.sleep_on_done:
             self.sleep()
-
-    # speech processing
-
-    def _process_speech(self, data: sr.AudioData) -> None:
-        if self.stt is None or not self.awake():
-            return
-
-        result = self.stt.transcribe(data, self)
-
-        if not result.has_speech or not result.text:
-            return
-
-        _log.info(f"Speech received: {result.text!r}")
-        self.process_command(result.text)
 
     def _wake_assistant(self) -> None:
         if self.hotword_detector is None:
