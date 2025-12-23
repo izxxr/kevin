@@ -172,9 +172,6 @@ class Kevin(PluginsMixin):
         command: :class:`str`
             The command to process.
         """
-        if not self.awake():
-            self.wake_up()
-
         _log.info("Command: %r", command)
 
         response = self.inference.chat(
