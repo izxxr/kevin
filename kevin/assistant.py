@@ -235,9 +235,15 @@ class Kevin(PluginsMixin):
             while not self.awake():
                 data, _ = stream.read(spec.frame_size)
 
-                if self.hotword_detector.process(data):
-                    self.wake_up()
-                    self.hotword_detector.reset()
+                if not self.hotword_detector.process(data):
+                    continue
+
+                # stop ongoing TTS speeches
+                while self.tts and self.tts.is_speaking():
+                    self.tts.stop()
+
+                self.wake_up()
+                self.hotword_detector.reset()
 
     def _listen_speech(self, source: sr.AudioSource) -> None:
         if not self.awake() and self.hotword_detector is not None:
@@ -249,6 +255,17 @@ class Kevin(PluginsMixin):
                 self.sleep()
             else:
                 self._process_speech(speech)
+
+    # Text mode
+
+    def _read_input(self) -> None:
+        command = input("$$ > ")
+
+        # stop ongoing TTS speeches
+        while self.tts and self.tts.is_speaking():
+            self.tts.stop()
+
+        self.process_command(command)
 
     # Awake state management
 
@@ -283,7 +300,7 @@ class Kevin(PluginsMixin):
 
     def _start_text_mode(self):
         while self._started:
-            self.process_command(input("$$ > "))
+            self._read_input()
 
     def _start_speech_mode(self):
         with sr.Microphone() as source:
