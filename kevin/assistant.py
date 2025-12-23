@@ -267,16 +267,29 @@ class Kevin(PluginsMixin):
     # Awake state management
 
     def awake(self) -> bool:
-        """Returns true if the assistant is awake."""
+        """Returns true if the assistant is awake.
+
+        This is only used in speech mode. If assistant is awake,
+        microphone input is processed by speech-to-text provider.
+        """
         return self._awake.is_set()
     
     def wake_up(self):
-        """Wakes up the assistant."""
+        """Wakes up the assistant.
+
+        This is only used in speech mode. If assistant is awake,
+        microphone input is processed by speech-to-text provider.
+        """
         _log.info("Waking up assistant.")
         self._awake.set()
 
     def sleep(self):
-        """Puts the model into sleep state."""
+        """Puts the model into sleep state.
+
+        This is only used in speech mode. If assistant is in sleep state,
+        speech-to-text is disabled and microphone input is processed through
+        hotword detector to wake the assistant.
+        """
         _log.info("Assistant going to sleep.")
         self._awake.clear()
 
