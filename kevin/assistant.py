@@ -383,44 +383,41 @@ class Kevin(PluginsMixin):
 
     # convenience methods
 
-    def generate_var(self, text: str, system_prompt: str | None = None) -> str:
-        """Generates a variation for the given text.
-
-        This method is useful in generating natural sounding responses
-        to commands.
+    def say(
+        self,
+        content: str,
+        speak: bool = True,
+        background: bool = True,
+        history_role: str = "assistant",
+    ) -> None:
+        """Says the given message.
 
         Parameters
         ----------
-        text: :class:`str`
-            The text to vary.
-        system_prompt: :class:`str` | None
-            The custom system prompt to give for guiding the model to vary
-            the text.
-
-        Returns
-        -------
-        :class:`str`
-            The varied text.
+        content: :class:`str`
+            The content of message to say.
+        speak: :class:`bool`
+            Whether to say the message through TTS if available. Defaults to True.
+            If no TTS is available or this is set to false, the message is simply logged.
+        background: :class:`bool`
+            If speakable message, whether to speak the message in background (non-blocking).
+            Defaults to true.
+        history_role: :class:`str` | None
+            The role with which the message is saved in history. Defaults to assistant.
+            If set to None, the message is not added to history.
         """
-        if system_prompt is None:
-            system_prompt = DEFAULT_VARIATION_SYSTEM_PROMPT.format(text=text)
+        if speak and self.tts:
+            self.tts.speak(content, background=background)
+        else:
+            if history_role:
+                output = f"Message ({history_role}): {content}"
+            else:
+                output = f"Message: {content}"
 
-        response = self.inference.chat(messages=[
-            Message(role="system", content=system_prompt)
-        ])
+            _log.info(output)
 
-        if response.content is None:
-            raise TypeError("response was unexpectedly None")
-
-        return response.content
-
-    def speak_var(self, text: str) -> None:
-        """Shorthand to: ``assistant.tts.speak(assistant.generate_var(text))``"""
-        if self.tts is None:
-            raise TypeError("No TTS provider is set")
-
-        response = self.generate_var(text)
-        self.tts.speak(response)
+        if history_role is not None:
+            self.add_message_to_history(history_role, content)
 
     # Chat history management
 
@@ -436,3 +433,25 @@ class Kevin(PluginsMixin):
             This returns the underlying history as-is instead of a copy.
         """
         return self._history
+
+    def add_message_to_history(self, role: str, content: str) -> Message:
+        """Adds a message to assistant's chat history.
+
+        Parameters
+        ----------
+        role: :class:`str`
+            The role that the message represents. This should be "assistant"
+            for representing messages from assistant or "user" for user originating
+            messages.
+        content: :class:`str`
+            The content of message to add.
+
+        Returns
+        -------
+        :class:`Message`
+            The created message.
+        """
+        m = Message(role=role, content=content)
+        self._history.append(m)
+
+        return m
