@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 from typing import Any, TYPE_CHECKING
-from kevin.data import Message, InferenceChatResponse
 from kevin.defs import DEFAULT_SYSTEM_PROMPT, DEFAULT_VARIATION_SYSTEM_PROMPT
+from kevin.data.chat_completion import Message, InferenceChatResponse
 from kevin.utils.plugins import PluginsMixin
 from kevin.tools.context import ToolCallContext
 
@@ -65,7 +65,7 @@ class Kevin(PluginsMixin):
         The system prompts to provide to language model.
 
         If `include_default_prompt` is true (default), the default system prompt
-        (defined in `kevin.data.DEFAULT_SYSTEM_PROMPT`) will be included in the
+        (defined in `kevin.defs.DEFAULT_SYSTEM_PROMPT`) will be included in the
         set of system prompts.
     include_default_prompt: :class:`bool`
         Whether to include the default system prompt in given system prompts. Defaults
