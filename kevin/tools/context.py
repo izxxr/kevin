@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Any, TYPE_CHECKING
+from kevin.tools.errors import ToolError
 
 if TYPE_CHECKING:
     from kevin.assistant import Kevin
@@ -23,3 +24,14 @@ class ToolCallContext:
         self.assistant = assistant
         self.tool = tool
         self.extras: dict[str, Any] = {}
+
+    def _call(self) -> None:
+        try:
+            self.tool.before_callback(self)
+            self.tool.callback(self)
+            self.tool.after_callback(self)
+        except Exception as exc:
+            if not isinstance(exc, ToolError):
+                exc = ToolError._from_exc(exc)
+
+            self.tool.error_handler(self, exc)

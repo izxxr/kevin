@@ -173,7 +173,7 @@ class Kevin(PluginsMixin):
             else:
                 tool = tool_tp(**call.arguments)
                 ctx = self._make_call_context(tool)
-                tool.callback(ctx)
+                ctx._call()
 
     def process_command(self, command: str):
         """Processes the given command.
