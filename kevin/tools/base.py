@@ -7,6 +7,7 @@ from pydantic import BaseModel
 
 if TYPE_CHECKING:
     from kevin.assistant import Kevin
+    from kevin.tools.context import ToolCallContext
 
 __all__ = (
     "Tool",
@@ -32,13 +33,13 @@ class Tool(BaseModel):
         """
         raise NotImplementedError("dump() must be defined by subclasses")
 
-    def callback(self, assistant: Kevin, /):
+    def callback(self, context: ToolCallContext, /):
         """Callback method for the tool.
 
         This is called when this tool is called by an LM.
 
         Parameters
         ----------
-        assistant: :class:`Kevin`
-            The assistant that called this tool.
+        context: :class:`ToolCallContext`
+            The context in which this tool was called.
         """

@@ -6,6 +6,7 @@ from typing import Any, TYPE_CHECKING
 from kevin.data import Message, InferenceChatResponse
 from kevin.defs import DEFAULT_SYSTEM_PROMPT, DEFAULT_VARIATION_SYSTEM_PROMPT
 from kevin.utils.plugins import PluginsMixin
+from kevin.tools.context import ToolCallContext
 
 import logging
 import threading
@@ -18,6 +19,7 @@ if TYPE_CHECKING:
     from kevin.tts import TTSProvider
     from kevin.inference import InferenceBackend
     from kevin.hotwords import HotwordDetector
+    from kevin.tools.base import Tool
 
 __all__ = (
     "Kevin",
@@ -156,6 +158,12 @@ class Kevin(PluginsMixin):
 
         return self._tools_data
     
+    def _make_call_context(self, tool: Tool) -> ToolCallContext:
+        return ToolCallContext(
+            assistant=self,
+            tool=tool,
+        )
+    
     def _call_tools_from_response(self, response: InferenceChatResponse):
         for call in response.tool_calls:
             try:
@@ -163,7 +171,9 @@ class Kevin(PluginsMixin):
             except KeyError:
                 _log.warning("Inference response contains invalid tool name")
             else:
-                tool_tp(**call.arguments).callback(self)
+                tool = tool_tp(**call.arguments)
+                ctx = self._make_call_context(tool)
+                tool.callback(ctx)
 
     def process_command(self, command: str):
         """Processes the given command.
