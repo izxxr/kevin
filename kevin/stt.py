@@ -51,7 +51,7 @@ class STTProvider:
     or Vosk.
     """
 
-    def transcribe(self, data: AudioData, assistant: Kevin) -> STTResult:
+    def transcribe(self, data: AudioData) -> STTResult:
         """Transcribes the given audio data.
 
         .. note::
@@ -64,8 +64,6 @@ class STTProvider:
         ----------
         data: :class:`speech_recognition.AudioData`
             The audio data to transcribe.
-        assistant: :class:`Kevin`
-            The assistant that called this method.
 
         Returns
         -------
@@ -102,6 +100,7 @@ class FasterWhisperSTT(STTProvider):
     def __init__(
         self,
         model_size_or_path: str,
+        *,
         no_speech_thresh: float = 0.5,
         whisper_model_options: dict[str, Any] | None = None,
     ):
@@ -124,7 +123,7 @@ class FasterWhisperSTT(STTProvider):
         )
         self.no_speech_thresh = no_speech_thresh
 
-    def transcribe(self, data: AudioData, assistant: Kevin) -> STTResult:
+    def transcribe(self, data: AudioData) -> STTResult:
         """Transcribes the audio data.
 
         The :attr:`STTResult.state` attribute is the raw transcription

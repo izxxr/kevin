@@ -42,7 +42,7 @@ class PluginsMixin:
 
     # Tools management
 
-    def add_tool(self, tool: type[Tool], override: bool = False) -> None:
+    def add_tool(self, tool: type[Tool], *, override: bool = False) -> None:
         """Registers a tool that can be called by the assistant.
 
         Parameters
@@ -61,7 +61,7 @@ class PluginsMixin:
 
         self._tools[tool.__tool_name__] = tool
 
-    def remove_tool(self, tool: type[Tool] | str, raise_error: bool = True) -> None:
+    def remove_tool(self, tool: type[Tool] | str, *, raise_error: bool = True) -> None:
         """Removes an already registered tool.
 
         Parameters
@@ -77,7 +77,8 @@ class PluginsMixin:
         try:
             self._tools.pop(tool)
         except KeyError:
-            raise ValueError("Invalid tool name") from None
+            if raise_error:
+                raise ValueError("Invalid tool name") from None
 
     def tools(self) -> Mapping[str, type[Tool]]:
         """Returns an immutable mapping of registered tools."""

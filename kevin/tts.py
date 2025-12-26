@@ -23,18 +23,18 @@ class TTSProvider:
         """Indicates if a speech is being synthesized or scheduled for synthesis."""
         raise NotImplementedError
 
-    def speak(self, text: str, background: bool = True) -> None:
+    def speak(self, text: str, blocking: bool = False) -> None:
         """Synthesizes the provided text as speech and plays it.
 
         Parameters
         ----------
         text: :class:`str`
             The text to convert to speech.
-        background: :class:`bool`
-            Whether to synthesize text without blocking the caller
-            thread. Defaults to true.
+        blocking: :class:`bool`
+            Whether to synthesize text while blocking the caller
+            thread. Defaults to false.
 
-            This parameter set to true only performs the TTS processing in
+            This parameter set to false performs the TTS processing in
             background. If speak() is called while another speech synthesis
             is in progress, most implementations should wait for previous
             synthesis to finish before starting the new one.
@@ -62,7 +62,7 @@ class PiperTTS(TTSProvider):
     voice_options:
         Additional options to pass to PiperVoice constructor.
     """
-    def __init__(self, voice_path: str, voice_options: dict[str, Any] | None = None) -> None:
+    def __init__(self, voice_path: str, *, voice_options: dict[str, Any] | None = None) -> None:
         try:
             from piper import PiperVoice
         except Exception:
@@ -91,15 +91,15 @@ class PiperTTS(TTSProvider):
 
             self._speeches -= 1
 
-    def speak(self, text: str, background: bool = True) -> None:
-        if background:
+    def speak(self, text: str, blocking: bool = False) -> None:
+        if blocking:
+            self._speak_worker(text)
+        else:
             threading.Thread(
                 target=self._speak_worker,
                 args=(text,),
                 daemon=True
             ).start()
-        else:
-            self._speak_worker(text)
 
     def stop(self) -> None:
         self._stopper.set()

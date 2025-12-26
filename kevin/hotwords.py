@@ -106,6 +106,7 @@ class PorcupineHotwordDetector(HotwordDetector):
 
     def __init__(
         self,
+        *,
         access_key: str | None = None,
         keywords: Sequence[str] | None = None,
         keyword_paths: Sequence[str] | None = None,

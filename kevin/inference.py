@@ -29,6 +29,7 @@ class InferenceBackend:
     def chat(
         self,
         messages: list[Message],
+        *,
         tools: list[Tool] | None = None,
         tools_data: list[dict[str, Any]] | None = None,
         extra_options: dict[str, Any] | None = None,
@@ -84,6 +85,7 @@ class HuggingFaceInferenceBackend(InferenceBackend):
     def __init__(
         self,
         model: str | None = None,
+        *,
         provider: str | None = None,
         token: str | None = None,
         client_options: dict[str, Any] | None = None
@@ -120,6 +122,7 @@ class HuggingFaceInferenceBackend(InferenceBackend):
     def chat(
         self,
         messages: list[Message],
+        *,
         tools: list[Tool] | None = None,
         tools_data: list[dict[str, Any]] | None = None,
         extra_options: dict[str, Any] | None = None,

@@ -210,7 +210,7 @@ class Kevin(PluginsMixin):
         if self.stt is None or not self.awake():
             return
 
-        result = self.stt.transcribe(data, self)
+        result = self.stt.transcribe(data)
 
         if not result.has_speech or not result.text:
             return
@@ -311,7 +311,7 @@ class Kevin(PluginsMixin):
         _log.info("Assistant going to sleep.")
         self._awake.clear()
 
-    def wait_until_awake(self, timeout: float | None = None):
+    def wait_until_awake(self, *, timeout: float | None = None):
         """Blocks until the model has awaken.
 
         Returns immediately if model is already awake.
@@ -341,7 +341,7 @@ class Kevin(PluginsMixin):
             except KeyboardInterrupt:
                 self.stop()
 
-    def start(self, setup_logging: bool = True) -> None:
+    def start(self, *, setup_logging: bool = True) -> None:
         """Starts the assistant.
 
         This is a blocking method and does not return until the assistant
@@ -386,9 +386,10 @@ class Kevin(PluginsMixin):
     def say(
         self,
         content: str,
+        *,
         speak: bool = True,
-        background: bool = True,
-        history_role: str = "assistant",
+        blocking: bool = False,
+        role: str | None = "assistant",
     ) -> None:
         """Says the given message.
 
@@ -399,25 +400,25 @@ class Kevin(PluginsMixin):
         speak: :class:`bool`
             Whether to say the message through TTS if available. Defaults to True.
             If no TTS is available or this is set to false, the message is simply logged.
-        background: :class:`bool`
-            If speakable message, whether to speak the message in background (non-blocking).
-            Defaults to true.
-        history_role: :class:`str` | None
+        blocking: :class:`bool`
+            If speakable message, whether to block the caller thread while synthesis
+            of speech. This is same as ``blocking`` parameter in :meth:`TTSProvider.speak`.
+        role: :class:`str` | None
             The role with which the message is saved in history. Defaults to assistant.
             If set to None, the message is not added to history.
         """
         if speak and self.tts:
-            self.tts.speak(content, background=background)
+            self.tts.speak(content, blocking=blocking)
         else:
-            if history_role:
-                output = f"Message ({history_role}): {content}"
+            if role:
+                output = f"Message ({role}): {content}"
             else:
                 output = f"Message: {content}"
 
             _log.info(output)
 
-        if history_role is not None:
-            self.add_message_to_history(history_role, content)
+        if role is not None:
+            self.add_message_to_history(role, content)
 
     # Chat history management
 
