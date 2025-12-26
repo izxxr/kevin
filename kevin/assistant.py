@@ -3,7 +3,11 @@
 from __future__ import annotations
 
 from typing import Any, TYPE_CHECKING
-from kevin.defs import DEFAULT_SYSTEM_PROMPT, DEFAULT_VARIATION_SYSTEM_PROMPT
+from rich.console import Console
+from rich.table import Table
+from rich.rule import Rule
+
+from kevin import defs
 from kevin.data.chat_completion import Message, InferenceChatResponse
 from kevin.utils.plugins import PluginsMixin
 from kevin.tools.context import ToolCallContext
@@ -96,7 +100,7 @@ class Kevin(PluginsMixin):
         system_prompts: list[str] | None = None,
         include_default_prompt: bool = True,
         assistant_name: str = "KEVIN",
-        user_name: str = "<unnamed>",
+        username: str = "<undefined>",
         max_history_messages: int = 5,
         listen_timeout: float | None = 5.0,
     ):
@@ -115,7 +119,7 @@ class Kevin(PluginsMixin):
             system_prompts = []
 
         if include_default_prompt:
-            system_prompts.insert(0, self._get_default_system_prompt(assistant_name, user_name))
+            system_prompts.insert(0, self._get_default_system_prompt(assistant_name, username))
 
         self.inference = inference
         self.stt = stt
@@ -136,6 +140,11 @@ class Kevin(PluginsMixin):
         self._awake = threading.Event()
         self._started = False
         self._history = collections.deque[Message](maxlen=max_history_messages)
+        self._max_history_messages = max_history_messages
+        self._username = username
+        self._assistant_name = assistant_name
+        self._rich_output = True
+        self._console = Console()
 
     # command processing
 
@@ -150,7 +159,7 @@ class Kevin(PluginsMixin):
         return copy
  
     def _get_default_system_prompt(self, assistant_name: str, user_name: str) -> str:
-        return DEFAULT_SYSTEM_PROMPT.format(assistant_name=assistant_name, user_name=user_name)
+        return defs.DEFAULT_SYSTEM_PROMPT.format(assistant_name=assistant_name, user_name=user_name)
 
     def _get_tools_data(self) -> list[dict[str, Any]]:
         if self._tools_data is None:
@@ -164,7 +173,9 @@ class Kevin(PluginsMixin):
             tool=tool,
         )
     
-    def _call_tools_from_response(self, response: InferenceChatResponse):
+    def _call_tools_from_response(self, response: InferenceChatResponse) -> list[str]:
+        names: list[str] = []
+
         for call in response.tool_calls:
             try:
                 tool_tp = self._tools[call.name]
@@ -174,6 +185,10 @@ class Kevin(PluginsMixin):
                 tool = tool_tp(**call.arguments)
                 ctx = self._make_call_context(tool)
                 ctx._call()
+
+            names.append(call.name)
+
+        return names
 
     def process_command(self, command: str):
         """Processes the given command.
@@ -196,13 +211,21 @@ class Kevin(PluginsMixin):
             tools_data=self._get_tools_data(),
         )
 
+        if response.content:
+            self._log_assistant(response.content)
+
         _log.info("Response: %r", response.content)
 
         if response.content and self.tts:
             self.tts.speak(response.content)
             self._history.append(Message(role="assistant", content=response.content))
 
-        self._call_tools_from_response(response)
+        called_names = self._call_tools_from_response(response)
+
+        if called_names and not response.content:
+            self._log_assistant(
+                f"[italic]Tool{'s' if len(called_names) > 2 else ''} Called: {', '.join(called_names)}[/italic]",
+            )
 
     # speech processing
 
@@ -216,6 +239,8 @@ class Kevin(PluginsMixin):
             return
 
         _log.info(f"Speech received: {result.text!r}")
+
+        self._log_user(result.text)
         self.process_command(result.text)
 
         # XXX: Currently, the assistant immediately sleeps after processing the command.
@@ -227,11 +252,10 @@ class Kevin(PluginsMixin):
         # TTS (silence assistant) and move to normal listen-process cycle. However, this solution
         # is slightly hacky and importantly, requires adjusting recognizer and hotword detector
         # to be able to recognize the hotword while assistant voice's noise is present in
-        # background. Further more (TODO) TTSProvider currently does not provider a proper
-        # 'silencing' interface. I would rather prefer implementing that first.
-        # For now, we are limited to require repeated wake up calls until a feasible solution
-        # is available.
+        # background. For now, we are limited to require repeated wake up calls until a
+        # feasible solution is available.
         if self.sleep_on_done:
+            self._log_rich("💤", "Sleeping...")
             self.sleep()
 
     def _wake_assistant(self) -> None:
@@ -257,6 +281,8 @@ class Kevin(PluginsMixin):
                 while self.tts and self.tts.is_speaking():
                     self.tts.stop()
 
+                self._log_rich("🎤", "Listening...", prepend_newline=True)
+
                 self.wake_up()
                 self.hotword_detector.reset()
 
@@ -267,6 +293,7 @@ class Kevin(PluginsMixin):
             try:
                 speech = self.recognizer.listen(source, timeout=self.listen_timeout)
             except sr.WaitTimeoutError:
+                self._log_rich("💤", "Sleeping...")
                 self.sleep()
             else:
                 self._process_speech(speech)
@@ -274,7 +301,10 @@ class Kevin(PluginsMixin):
     # Text mode
 
     def _read_input(self) -> None:
-        command = input("$$ > ")
+        if self._rich_output:
+            command = self._console.input("\n 👤 │ ")  # type: ignore
+        else:
+            command = input("$$ > ")
 
         # stop ongoing TTS speeches
         while self.tts and self.tts.is_speaking():
@@ -341,7 +371,62 @@ class Kevin(PluginsMixin):
             except KeyboardInterrupt:
                 self.stop()
 
-    def start(self, *, setup_logging: bool = True) -> None:
+    def _print_splash(self):
+        if not self._rich_output:
+            return
+
+        self._console.print(defs.KEVIN_ASCII_ART, "\n", justify="center")
+
+        table = Table("Key", "Value", title="Startup Information")
+
+        table.add_row("Assistant Name", self._assistant_name)
+        table.add_row("User Name", self._username)
+        table.add_row("History Size", str(self._max_history_messages))
+        table.add_row("Registered Plugins", str(len(self._plugins)))
+
+        self._console.print(table, justify="center")
+        self._console.print(Rule(align="center"))
+
+        self._console.print()
+        self._log_rich(
+            "🚀", f"Running in [yellow]{'💬 text' if self.text_input_mode else '🎤 speech'}[/yellow] mode",
+        )
+
+    def _log_rich(
+        self,
+        emoji: str,
+        text: str,
+        prepend_newline: bool = False,
+        return_result: bool = False,
+        **kwargs: Any
+    ) -> Any:
+        if not self._rich_output:
+            return
+
+        table = Table(
+            show_header=False,
+            show_edge=False,
+            show_footer=False,
+            show_lines=False
+        )
+
+        table.add_row(f"{emoji}", text)
+
+        if return_result:
+            return table
+
+        if prepend_newline:
+            self._console.line()
+
+        self._console.print(table, **kwargs)
+
+    def _log_user(self, text: str): 
+        self._log_rich("👤", text)
+
+    def _log_assistant(self, text: str):
+        self._log_rich("💡", text)
+
+    def start(self, *, verbose_logging: bool = False) -> None:
         """Starts the assistant.
 
         This is a blocking method and does not return until the assistant
@@ -349,14 +434,20 @@ class Kevin(PluginsMixin):
 
         Parameters
         ----------
-        setup_logging: :class:`bool`
-            Whether to enable logs based on given logging configuration for the
-            assistant. Default is true.
+        verbose_logging: :class:`bool`
+            Whether to enable verbose logs. By default, with this set to false,
+            assistant starts with an interactive chatting terminal interface.
+
+            This parameter can be set while debugging to get verbose logging outputs
+            without any interactive interface.
         """
         if self._started:
             raise RuntimeError("Assistant is already running")
         
-        if setup_logging:
+        self._rich_output = not verbose_logging
+        self._print_splash()
+
+        if verbose_logging:
             logging.basicConfig(level=logging.INFO)
 
         _log.info("KEVIN is starting")
@@ -379,6 +470,8 @@ class Kevin(PluginsMixin):
             return
 
         _log.info("KEVIN is stopping")
+
+        self._log_rich("❌", "Exiting...")
         self._started = False
 
     # convenience methods
