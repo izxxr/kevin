@@ -503,13 +503,8 @@ class Kevin(PluginsMixin):
         """
         if speak and self.tts:
             self.tts.speak(content, blocking=blocking)
-        else:
-            if role:
-                output = f"Message ({role}): {content}"
-            else:
-                output = f"Message: {content}"
 
-            _log.info(output)
+        self._log_assistant(content)
 
         if role is not None:
             self.add_message_to_history(role, content)
