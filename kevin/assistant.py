@@ -375,7 +375,7 @@ class Kevin(PluginsMixin):
         if not self._rich_output:
             return
 
-        self._console.print(defs.KEVIN_ASCII_ART, "\n", justify="center")
+        self._console.print(defs.KEVIN_ASCII_ART, "\n", highlight=False, justify="center")
 
         table = Table("Key", "Value", title="Startup Information")
 
