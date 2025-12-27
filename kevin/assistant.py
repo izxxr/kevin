@@ -524,10 +524,10 @@ class Kevin(PluginsMixin):
             The role with which the message is saved in history. Defaults to assistant.
             If set to None, the message is not added to history.
         """
+        self._log_assistant(content)
+
         if speak and self.tts:
             self.tts.speak(content, blocking=blocking)
-
-        self._log_assistant(content)
 
         if role is not None:
             self.add_message_to_history(role, content)
