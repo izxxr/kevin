@@ -19,7 +19,7 @@ import sounddevice as sd
 import speech_recognition as sr
 
 if TYPE_CHECKING:
-    from kevin.stt import STTProvider
+    from kevin.stt import STTProvider, STTResult
     from kevin.tts import TTSProvider
     from kevin.inference import InferenceBackend
     from kevin.hotwords import HotwordDetector
@@ -29,6 +29,7 @@ __all__ = (
     "Kevin",
 )
 
+_default: Any = object()
 _log = logging.getLogger(__name__)
 
 
@@ -229,7 +230,7 @@ class Kevin(PluginsMixin):
 
     # speech processing
 
-    def _process_speech(self, data: sr.AudioData) -> None:
+    def _process_speech(self, data: sr.AudioData, return_result: bool = False) -> STTResult | None:
         if self.stt is None or not self.awake():
             return
 
@@ -239,8 +240,11 @@ class Kevin(PluginsMixin):
             return
 
         _log.info(f"Speech received: {result.text!r}")
-
         self._log_user(result.text)
+
+        if return_result:
+            return result
+
         self.process_command(result.text)
 
         # XXX: Currently, the assistant immediately sleeps after processing the command.
@@ -286,25 +290,36 @@ class Kevin(PluginsMixin):
                 self.wake_up()
                 self.hotword_detector.reset()
 
-    def _listen_speech(self, source: sr.AudioSource) -> None:
-        if not self.awake() and self.hotword_detector is not None:
-            self._wake_assistant()
+    def _listen_speech(self, source: sr.AudioSource, return_result: bool = False, listen_timeout: float | None = _default) -> STTResult | None:
+        if not self.awake() and self.hotword_detector is not None and not return_result:
+            return self._wake_assistant()
+        if listen_timeout is _default:
+            listen_timeout = self.listen_timeout
+
+        try:
+            speech = self.recognizer.listen(source, timeout=listen_timeout)
+        except sr.WaitTimeoutError:
+            if return_result:
+                raise TimeoutError("Timed out while waiting for speech input") from None
+
+            self._log_rich("💤", "Sleeping...")
+            self.sleep()
         else:
-            try:
-                speech = self.recognizer.listen(source, timeout=self.listen_timeout)
-            except sr.WaitTimeoutError:
-                self._log_rich("💤", "Sleeping...")
-                self.sleep()
-            else:
-                self._process_speech(speech)
+            result = self._process_speech(speech, return_result=return_result)
+
+            if return_result:
+                return result
 
     # Text mode
 
-    def _read_input(self) -> None:
+    def _read_input(self, return_input: bool = False) -> str | None:
         if self._rich_output:
-            command = self._console.input("\n 👤 │ ")  # type: ignore
+            command = self._console.input(f"{'' if return_input else '\n'} 👤 │ ")  # type: ignore
         else:
             command = input("$$ > ")
+
+        if return_input:
+            return command
 
         # stop ongoing TTS speeches
         while self.tts and self.tts.is_speaking():
@@ -508,6 +523,69 @@ class Kevin(PluginsMixin):
 
         if role is not None:
             self.add_message_to_history(role, content)
+
+    def ask(
+        self,
+        prompt: str | None = None,
+        *,
+        listen: bool = True,
+        listen_timeout: float | None = _default,
+    ):
+        """Ask or prompt the user for an input.
+
+        Parameters
+        ----------
+        prompt: :class:`str` | None
+            The prompt to show for input. This is simply passed to the
+            :meth:`.say` method call before taking the input.
+        listen: :class:`bool`
+            Whether to listen the input if an STT provider is available (i.e.
+            assistant is running in speech mode)
+
+            Defaults to true. If set to false, the input is taken through
+            standard input regardless of text or speech mode.
+        listen_timeout: :class:`float` | None
+            Only applicable for `listen=True` - the number of seconds to wait
+            for speech before timing out. If not passed, defaults to the global
+            :attr:`.listen_timeout` value.
+
+            If None is passed, the listening will continue indefinitely until
+            a speech is recognized.
+
+        Returns
+        -------
+        :class:`str`
+            The received input.
+
+        Raises
+        ------
+        TimeoutError
+            No speech detected in `listen_timeout` seconds.
+        """
+        if prompt:
+            self.say(prompt)
+        if listen and not self.text_input_mode:
+            if self.microphone.stream is not None:
+                result = self._listen_speech(
+                    self.microphone,
+                    return_result=True,
+                    listen_timeout=listen_timeout
+                )
+            else:
+                with self.microphone:
+                    result = self._listen_speech(
+                        self.microphone,
+                        return_result=True,
+                        listen_timeout=listen_timeout
+                    )
+
+            assert result is not None, "_listen_speech() unexpectedly returned None"
+            text = result.text
+        else:
+            text = self._read_input(return_input=True)
+
+        assert text is not None, "_read_input() unexpectedly returned None"
+        return text
 
     # Chat history management
 
