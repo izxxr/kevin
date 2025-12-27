@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Any, TYPE_CHECKING
+from typing import Any, Mapping, TYPE_CHECKING
+from types import MappingProxyType
+from functools import cached_property
+
 from kevin.tools.errors import ToolError
 
 if TYPE_CHECKING:
@@ -24,6 +27,16 @@ class ToolCallContext:
         self.assistant = assistant
         self.tool = tool
         self.extras: dict[str, Any] = {}
+
+    @cached_property
+    def tool_args(self) -> Mapping[str, Any]:
+        """The dictionary of arguments passed to called tool.
+
+        The key is the argument name and value is the passed value.
+        """
+        # I don't think the tool arguments should or can ever change
+        # within a call context's lifecycle so caching this is fine.
+        return MappingProxyType(self.tool.model_dump())
 
     def _call(self) -> None:
         try:

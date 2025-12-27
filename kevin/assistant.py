@@ -21,7 +21,7 @@ import speech_recognition as sr
 if TYPE_CHECKING:
     from kevin.stt import STTProvider, STTResult
     from kevin.tts import TTSProvider
-    from kevin.inference import InferenceBackend
+    from kevin.inference import InferenceBackend, InferenceChatResponse
     from kevin.hotwords import HotwordDetector
     from kevin.tools.base import Tool
 
@@ -174,12 +174,20 @@ class Kevin(PluginsMixin):
             tool=tool,
         )
     
-    def _call_tools_from_response(self, response: InferenceChatResponse) -> list[str]:
+    def _call_tools_from_response(
+        self,
+        response: InferenceChatResponse,
+        tools: dict[str, type[Tool]] | None = None
+    ) -> list[str]:
+
+        if tools is None:
+            tools = self._tools
+
         names: list[str] = []
 
         for call in response.tool_calls:
             try:
-                tool_tp = self._tools[call.name]
+                tool_tp = tools[call.name]
             except KeyError:
                 _log.warning("Inference response contains invalid tool name")
             else:
@@ -586,6 +594,34 @@ class Kevin(PluginsMixin):
 
         assert text is not None, "_read_input() unexpectedly returned None"
         return text
+    
+    def chat(
+        self,
+        messages: list[Message],
+        *,
+        tools: list[type[Tool]] | None = None,
+        tools_data: list[dict[str, Any]] | None = None,
+        extra_options: dict[str, Any] | None = None,
+    ) -> InferenceChatResponse:
+        """Performs chat completion inference on given messages.
+
+        This method is similar to :meth:`InferenceBackend.chat` except
+        that post processing is performed on inference result such as
+        calling relevant tools.
+
+        Note that the result's content is not added to assistant's history
+        or processed through TTS. If either of these operations are required,
+        they must be done manually.
+
+        All parameters that this method takes are the same as :meth:`InferenceBackend.chat`
+        and returns :class:`InferenceChatResponse`.
+        """
+        result = self.inference.chat(messages, tools=tools, tools_data=tools_data, extra_options=extra_options)
+
+        if tools and result.tool_calls:
+            self._call_tools_from_response(result, tools={t.__tool_name__: t for t in tools})
+
+        return result
 
     # Chat history management
 

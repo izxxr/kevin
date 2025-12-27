@@ -30,7 +30,7 @@ class InferenceBackend:
         self,
         messages: list[Message],
         *,
-        tools: list[Tool] | None = None,
+        tools: list[type[Tool]] | None = None,
         tools_data: list[dict[str, Any]] | None = None,
         extra_options: dict[str, Any] | None = None,
     ) -> InferenceChatResponse:
@@ -123,7 +123,7 @@ class HuggingFaceInferenceBackend(InferenceBackend):
         self,
         messages: list[Message],
         *,
-        tools: list[Tool] | None = None,
+        tools: list[type[Tool]] | None = None,
         tools_data: list[dict[str, Any]] | None = None,
         extra_options: dict[str, Any] | None = None,
     ) -> InferenceChatResponse:
