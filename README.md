@@ -10,7 +10,7 @@
 
 - Built-in support for [FasterWhisper](https://github.com/SYSTRAN/faster-whisper) (STT), [Porcupine](https://github.com/Picovoice/porcupine) (wake word),
   [Piper](https://github.com/OHF-Voice/piper1-gpl) (TTS), [HF `InferenceClient`](https://huggingface.co/docs/huggingface_hub/en/package_reference/inference_client) (LLM inference)
-- Flexible interface to use other providers for STT, TTS, hotword detection, and LLM inference
+- Flexible interface to use other providers for STT, TTS, wake mechanism, and LLM inference
 - Pydantic based declarative tools definition interface (native support for [function calling](https://huggingface.co/docs/hugs/main/en/guides/function-calling))
 - Sensible pre-defined defaults and system prompts yet fully customizable
 - Plugins support for modularized tools definitions
