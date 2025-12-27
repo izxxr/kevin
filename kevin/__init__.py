@@ -12,7 +12,7 @@ from kevin import (
     data as data,
     tools as tools,
     utils as utils,
-    hotwords as hotwords,
+    waker as waker,
 )
 
 __version__ = "0.1.0"

@@ -22,7 +22,7 @@ if TYPE_CHECKING:
     from kevin.stt import STTProvider, STTResult
     from kevin.tts import TTSProvider
     from kevin.inference import InferenceBackend, InferenceChatResponse
-    from kevin.hotwords import HotwordDetector
+    from kevin.waker import Waker
     from kevin.tools.base import Tool
 
 __all__ = (
@@ -55,14 +55,9 @@ class Kevin(PluginsMixin):
         audio input device is to be used.
 
         If not provided, the default microphone is used.
-    hotword_detect_func:
-        Function called on speech when assistant is asleep to detect a hotword.
-
-        The function returns True if a hotword is detected and if assistant
-        should be woken up.
-
-        For a better interface, it is recommended to use :meth:`.hotword_detect`
-        decorator in most cases unless an existing function is to be set.
+    waker: :class:`Waker`
+        The waker to use for managing assistant's awake state. If an STT provider is set,
+        this must be provided.
     sleep_on_done: :class:`bool`
         Whether to sleep after command or action execution is done. This should
         generally never be set to false. Default is true.
@@ -85,8 +80,8 @@ class Kevin(PluginsMixin):
         The maximum messages to remember as history. This is exclusive of any system prompts and
         only inclusive of the assistant/user messages. Default is 5.
     listen_timeout: :class:`float`
-        The number of seconds to wait before sleeping if no speech is detected after hotword. Defaults
-        to 10 seconds. Setting this to None removes timeout.
+        The number of seconds to wait before sleeping if no speech is detected after waking up.
+        Defaults to 10 seconds. Setting this to None removes timeout.
     """
 
     def __init__(
@@ -96,7 +91,7 @@ class Kevin(PluginsMixin):
         recognizer: sr.Recognizer | None = None,
         microphone: sr.Microphone | None = None,
         tts: TTSProvider | None = None,
-        hotword_detector: HotwordDetector | None = None,
+        waker: Waker | None = None,
         sleep_on_done: bool = True,
         system_prompts: list[str] | None = None,
         include_default_prompt: bool = True,
@@ -106,8 +101,8 @@ class Kevin(PluginsMixin):
         listen_timeout: float | None = 5.0,
     ):
         # TODO: add support for other wake-up mechanisms e.g. push-to-talk
-        if stt is not None and hotword_detector is None:
-            raise TypeError("hotword_detector must be provider if stt is set")
+        if stt is not None and waker is None:
+            raise TypeError("waker must be provider if stt is set")
 
         if recognizer is None:
             recognizer = sr.Recognizer()
@@ -127,7 +122,7 @@ class Kevin(PluginsMixin):
         self.recognizer = recognizer
         self.microphone = microphone if microphone is not None else sr.Microphone()
         self.tts = tts
-        self.hotword_detector = hotword_detector
+        self.waker = waker
         self.sleep_on_done = sleep_on_done
         self.text_input_mode = stt is None
         self.text_output_mode = tts is None
@@ -138,7 +133,6 @@ class Kevin(PluginsMixin):
         self._plugins = {}
         self._name = "main"
         self._tools_data = None
-        self._awake = threading.Event()
         self._started = False
         self._history = collections.deque[Message](maxlen=max_history_messages)
         self._max_history_messages = max_history_messages
@@ -239,7 +233,7 @@ class Kevin(PluginsMixin):
     # speech processing
 
     def _process_speech(self, data: sr.AudioData, return_result: bool = False) -> STTResult | None:
-        if self.stt is None or not self.awake():
+        if self.stt is None or not self._awake():
             return
 
         result = self.stt.transcribe(data)
@@ -266,41 +260,30 @@ class Kevin(PluginsMixin):
         # to be able to recognize the hotword while assistant voice's noise is present in
         # background. For now, we are limited to require repeated wake up calls until a
         # feasible solution is available.
-        if self.sleep_on_done:
+        if self.sleep_on_done and self.waker is not None:
             self._log_rich("💤", "Sleeping...")
-            self.sleep()
+            self.waker.sleep()
+
+    def _awake(self) -> bool:
+        return self.waker is not None and self.waker.awake()
 
     def _wake_assistant(self) -> None:
-        if self.hotword_detector is None:
+        assert self.waker is not None
+        self.waker.try_wake()
+
+        if not self.waker.awake():
             return
 
-        spec = self.hotword_detector.get_audio_spec()
+        # stop ongoing TTS speeches
+        while self.tts and self.tts.is_speaking():
+            self.tts.stop()
 
-        with sd.InputStream(
-            samplerate=spec.sample_rate,
-            blocksize=spec.frame_size,
-            dtype=spec.dtype,
-            channels=spec.channels,
-            device=self.microphone.device_index,
-        ) as stream:
-            while not self.awake():
-                data, _ = stream.read(spec.frame_size)
-
-                if not self.hotword_detector.process(data):
-                    continue
-
-                # stop ongoing TTS speeches
-                while self.tts and self.tts.is_speaking():
-                    self.tts.stop()
-
-                self._log_rich("🎤", "Listening...", prepend_newline=True)
-
-                self.wake_up()
-                self.hotword_detector.reset()
+        self._log_rich("🎤", "Listening...", prepend_newline=True)
 
     def _listen_speech(self, source: sr.AudioSource, return_result: bool = False, listen_timeout: float | None = _default) -> STTResult | None:
-        if not self.awake() and self.hotword_detector is not None and not return_result:
+        if not self._awake() and not return_result:
             return self._wake_assistant()
+
         if listen_timeout is _default:
             listen_timeout = self.listen_timeout
 
@@ -311,7 +294,7 @@ class Kevin(PluginsMixin):
                 raise TimeoutError("Timed out while waiting for speech input") from None
 
             self._log_rich("💤", "Sleeping...")
-            self.sleep()
+            self.waker.sleep()  # type: ignore
         else:
             result = self._process_speech(speech, return_result=return_result)
 
@@ -334,48 +317,6 @@ class Kevin(PluginsMixin):
             self.tts.stop()
 
         self.process_command(command)
-
-    # Awake state management
-
-    def awake(self) -> bool:
-        """Returns true if the assistant is awake.
-
-        This is only used in speech mode. If assistant is awake,
-        microphone input is processed by speech-to-text provider.
-        """
-        return self._awake.is_set()
-    
-    def wake_up(self):
-        """Wakes up the assistant.
-
-        This is only used in speech mode. If assistant is awake,
-        microphone input is processed by speech-to-text provider.
-        """
-        _log.info("Waking up assistant.")
-        self._awake.set()
-
-    def sleep(self):
-        """Puts the model into sleep state.
-
-        This is only used in speech mode. If assistant is in sleep state,
-        speech-to-text is disabled and microphone input is processed through
-        hotword detector to wake the assistant.
-        """
-        _log.info("Assistant going to sleep.")
-        self._awake.clear()
-
-    def wait_until_awake(self, *, timeout: float | None = None):
-        """Blocks until the model has awaken.
-
-        Returns immediately if model is already awake.
-
-        Parameters
-        ----------
-        timeout: float | None
-            If supplied, raises TimeoutError after the specified timeout duration in
-            seconds. Defaults to None (no timeout).
-        """
-        self._awake.wait(timeout)
 
     # Assistant started state
 
