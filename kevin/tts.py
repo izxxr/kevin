@@ -89,6 +89,8 @@ class PiperTTS(TTSProvider):
                 sd.wait()
                 sd.play(chunk.audio_float_array, samplerate=chunk.sample_rate)
 
+            # wait for last audio chunk to finish before releasing the lock
+            sd.wait()
             self._speeches -= 1
 
     def speak(self, text: str, blocking: bool = False) -> None:

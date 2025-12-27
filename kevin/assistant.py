@@ -538,6 +538,7 @@ class Kevin(PluginsMixin):
         *,
         listen: bool = True,
         listen_timeout: float | None = _default,
+        blocking: bool = True,
     ):
         """Ask or prompt the user for an input.
 
@@ -559,6 +560,13 @@ class Kevin(PluginsMixin):
 
             If None is passed, the listening will continue indefinitely until
             a speech is recognized.
+        blocking: :class:`bool`
+            Whether to block the caller thread while speaking the prompt. Only
+            applicable for `listen=True` case.
+
+            The default for this is true in this method, unlike in :meth:`.say`,
+            to avoid echo back to user input speech. The prompt is first completed
+            before listening to input speech.
 
         Returns
         -------
@@ -571,7 +579,7 @@ class Kevin(PluginsMixin):
             No speech detected in `listen_timeout` seconds.
         """
         if prompt:
-            self.say(prompt)
+            self.say(prompt, blocking=blocking)
         if listen and not self.text_input_mode:
             if self.microphone.stream is not None:
                 result = self._listen_speech(
