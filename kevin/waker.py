@@ -9,9 +9,13 @@ import threading
 import sounddevice as sd
 import numpy as np
 
+if TYPE_CHECKING:
+    import keyboard
+
 __all__ = (
     "Waker",
     "PorcupineWaker",
+    "HotkeyWaker",
 )
 
 
@@ -168,3 +172,34 @@ class PorcupineWaker(Waker):
 
     def try_wake(self) -> None:
         self._read_speech()
+
+
+class HotkeyWaker(Waker):
+    """Waker based on single press of hotkey.
+
+    Once the bound hotkey is pressed, the awake state is set. This
+    is not the same as push-to-talk which would have required the
+    hotkey to be held.
+
+    This waker requires `keyboard` library to be installed.
+
+    Parameters
+    ----------
+    hotkey: :class:`str`
+        The hotkey to listen to. This can be given as a keyboard combination
+        e.g. `ctrl + /`
+    """
+    def __init__(self, hotkey: str) -> None:
+        try:
+            import keyboard
+        except Exception:
+            raise RuntimeError("keyboard library must be installed to use HotkeyWaker")
+
+        self.hotkey = hotkey
+        self._wait = keyboard.wait
+
+        super().__init__()
+
+    def try_wake(self) -> None:
+        self._wait(self.hotkey)
+        self.wake()
