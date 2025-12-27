@@ -41,11 +41,12 @@ dependencies = { file = "requirements.txt" }
 
 [project.optional-dependencies]
 default = [
-    "pvporcupine==4.0.*",
     "huggingface_hub==0.36.*",
+    "SpeechRecognition[faster-whisper]==3.14.*",
     "faster-whisper==1.2.*",
     "piper-tts==1.3.*",
-    "SpeechRecognition[faster-whisper]==3.14.*",
+    "pvporcupine==4.0.*",
+    "keyboard==0.13.*",
 ]
 
 [tool.setuptools]

@@ -13,12 +13,18 @@ from kevin.utils.plugins import PluginsMixin
 from kevin.tools.context import ToolCallContext
 
 import logging
-import threading
 import collections
-import sounddevice as sd
-import speech_recognition as sr
+
+try:
+    import speech_recognition as sr
+except ImportError:
+    _sr_installed = False
+else:
+    _sr_installed = True
 
 if TYPE_CHECKING:
+    import speech_recognition as sr
+
     from kevin.stt import STTProvider, STTResult
     from kevin.tts import TTSProvider
     from kevin.inference import InferenceBackend, InferenceChatResponse
@@ -100,16 +106,21 @@ class Kevin(PluginsMixin):
         max_history_messages: int = 5,
         listen_timeout: float | None = 5.0,
     ):
-        # TODO: add support for other wake-up mechanisms e.g. push-to-talk
+        if stt and not _sr_installed:
+            raise RuntimeError("SpeechRecognition library must be installed to use speech mode")
+
         if stt is not None and waker is None:
             raise TypeError("waker must be provider if stt is set")
 
-        if recognizer is None:
+        if recognizer is None and _sr_installed:
             recognizer = sr.Recognizer()
 
             if listen_timeout is not None:
                 # This is usually needed for listen_timeout to work properly.
                 recognizer.dynamic_energy_threshold = False
+
+        if microphone is None and _sr_installed:
+            microphone = sr.Microphone()
 
         if system_prompts is None:
             system_prompts = []
@@ -120,7 +131,7 @@ class Kevin(PluginsMixin):
         self.inference = inference
         self.stt = stt
         self.recognizer = recognizer
-        self.microphone = microphone if microphone is not None else sr.Microphone()
+        self.microphone = microphone
         self.tts = tts
         self.waker = waker
         self.sleep_on_done = sleep_on_done
@@ -288,7 +299,7 @@ class Kevin(PluginsMixin):
             listen_timeout = self.listen_timeout
 
         try:
-            speech = self.recognizer.listen(source, timeout=listen_timeout)
+            speech = self.recognizer.listen(source, timeout=listen_timeout)  # type: ignore
         except sr.WaitTimeoutError:
             if return_result:
                 raise TimeoutError("Timed out while waiting for speech input") from None
@@ -325,6 +336,9 @@ class Kevin(PluginsMixin):
             self._read_input()
 
     def _start_speech_mode(self):
+        assert self.microphone is not None, "no microphone set"
+        assert self.recognizer is not None, "no recognizer set"
+
         with self.microphone as source:
             _log.info(f"Calibrating recognizer for ambient noise from device {source.device_index}")
             self.recognizer.adjust_for_ambient_noise(source)
@@ -522,6 +536,8 @@ class Kevin(PluginsMixin):
         if prompt:
             self.say(prompt, blocking=blocking)
         if listen and not self.text_input_mode:
+            assert self.microphone is not None, "microphone is not set"
+
             if self.microphone.stream is not None:
                 result = self._listen_speech(
                     self.microphone,

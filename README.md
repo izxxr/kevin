@@ -30,6 +30,13 @@ the built-in providers including:
 - `piper-tts` for text to speech
 - `huggingface_hub` for LLM response generation
 - `pvporcupine` for wake word detection.
+- `keyboard` for hotkey waker.
+
+You may install selective libraries if you do not plan to use one of the features
+listed above.
+
+For plain text mode (no speech commands), you can simply install without `default`
+dependency and install `huggingface_hub` separately.
 
 ## Quickstart
 
