@@ -5,11 +5,8 @@ from __future__ import annotations
 from typing import Any, TYPE_CHECKING
 from dataclasses import dataclass
 
-from speech_recognition.recognizers.whisper_local import faster_whisper as fw_recognizer
-from speech_recognition import AudioData
-
 if TYPE_CHECKING:
-    from kevin.assistant import Kevin
+    from speech_recognition import AudioData
 
 __all__ = (
     "STTProvider",
@@ -105,9 +102,10 @@ class FasterWhisperSTT(STTProvider):
         whisper_model_options: dict[str, Any] | None = None,
     ):
         try:
+            from speech_recognition.recognizers.whisper_local import faster_whisper as fw_recognizer
             import faster_whisper
         except Exception:
-            raise RuntimeError("FasterWhisperSTT requires faster-whisper to be installed")
+            raise RuntimeError("FasterWhisperSTT requires faster-whisper and SpeechRecognition to be installed")
 
         if whisper_model_options is None:
             whisper_model_options = {}
