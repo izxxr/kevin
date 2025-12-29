@@ -722,17 +722,30 @@ class Kevin(PluginsMixin):
             return __wrapper  # @hook(...)
 
     def hook_assistant_wake(self) -> None:
-        """Hook called when the assistant wakes (waker awake state is set)"""
+        """Hook called when the assistant wakes (waker awake state is set)
+
+        By default, this hook prints the _Listening..._ message.
+        """
         self._log_rich("🎤", "Listening...", prepend_newline=True)
 
     def hook_assistant_sleep(self) -> None:
-        """Hook called when the assistant sleeps (waker awake state is cleared)"""
+        """Hook called when the assistant sleeps (waker awake state is cleared)
+
+        By default, this hook prints the _Sleeping..._ message.
+        """
         self._log_rich("💤", "Sleeping...")
     
     def hook_assistant_start(self) -> None:
-        """Hook called when the assistant starts."""
+        """Hook called when the assistant starts.
+
+        By default, this hook prints the splash or initial output when
+        assistant starts containing useful startup information.
+        """
         self._print_splash()
 
     def hook_assistant_stop(self) -> None:
-        """Hook called when the assistant is stopped."""
+        """Hook called when the assistant is stopped.
+
+        By default, this hook prints the _Exiting..._ message.
+        """
         self._log_rich("❌", "Exiting...")
