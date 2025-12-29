@@ -66,8 +66,14 @@ class Kevin(PluginsMixin):
         The waker to use for managing assistant's awake state. If an STT provider is set,
         this must be provided.
     sleep_on_done: :class:`bool`
-        Whether to sleep after command or action execution is done. This should
-        generally never be set to false. Default is true.
+        Whether to sleep after command execution is done. Defaults to true.
+
+        .. warning::
+
+            This should be set to false with caution. In speech mode, if assistant does not
+            sleep after execution is done then any TTS output may echo back and be detected
+            as speech input.
+
     system_prompts: list[:class:`str`] | None
         The system prompts to provide to language model.
 
