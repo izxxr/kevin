@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, TYPE_CHECKING
+from typing import Any, Callable, TYPE_CHECKING
 from rich.console import Console
 from rich.table import Table
 from rich.rule import Rule
@@ -13,6 +13,7 @@ from kevin.utils.plugins import PluginsMixin
 from kevin.tools.context import ToolCallContext
 
 import logging
+import inspect
 import collections
 
 try:
@@ -23,13 +24,13 @@ else:
     _sr_installed = True
 
 if TYPE_CHECKING:
-    import speech_recognition as sr
-
     from kevin.stt import STTProvider, STTResult
     from kevin.tts import TTSProvider
     from kevin.inference import InferenceBackend, InferenceChatResponse
     from kevin.waker import Waker
     from kevin.tools.base import Tool
+
+    import speech_recognition as sr
 
 __all__ = (
     "Kevin",
@@ -142,6 +143,7 @@ class Kevin(PluginsMixin):
 
         self._tools = {}
         self._plugins = {}
+        self._hooks = {}
         self._name = "main"
         self._tools_data = None
         self._started = False
@@ -152,7 +154,7 @@ class Kevin(PluginsMixin):
         self._rich_output = True
         self._console = Console()
 
-    # command processing
+    # internal helpers
 
     def _get_messages(self, command: str):
         msg = Message(role="user", content=command)
@@ -166,6 +168,8 @@ class Kevin(PluginsMixin):
  
     def _get_default_system_prompt(self, assistant_name: str, user_name: str) -> str:
         return defs.DEFAULT_SYSTEM_PROMPT.format(assistant_name=assistant_name, user_name=user_name)
+
+    # command processing
 
     def _get_tools_data(self) -> list[dict[str, Any]]:
         if self._tools_data is None:
@@ -272,8 +276,8 @@ class Kevin(PluginsMixin):
         # background. For now, we are limited to require repeated wake up calls until a
         # feasible solution is available.
         if self.sleep_on_done and self.waker is not None:
-            self._log_rich("💤", "Sleeping...")
             self.waker.sleep()
+            self._call_hook("assistant_sleep")
 
     def _awake(self) -> bool:
         return self.waker is not None and self.waker.awake()
@@ -289,7 +293,7 @@ class Kevin(PluginsMixin):
         while self.tts and self.tts.is_speaking():
             self.tts.stop()
 
-        self._log_rich("🎤", "Listening...", prepend_newline=True)
+        self._call_hook("assistant_wake")
 
     def _listen_speech(self, source: sr.AudioSource, return_result: bool = False, listen_timeout: float | None = _default) -> STTResult | None:
         if not self._awake() and not return_result:
@@ -304,15 +308,15 @@ class Kevin(PluginsMixin):
             if return_result:
                 raise TimeoutError("Timed out while waiting for speech input") from None
 
-            self._log_rich("💤", "Sleeping...")
             self.waker.sleep()  # type: ignore
+            self._call_hook("assistant_sleep")
         else:
             result = self._process_speech(speech, return_result=return_result)
 
             if return_result:
                 return result
 
-    # Text mode
+    # text mode
 
     def _read_input(self, return_input: bool = False) -> str | None:
         if self._rich_output:
@@ -329,7 +333,7 @@ class Kevin(PluginsMixin):
 
         self.process_command(command)
 
-    # Assistant started state
+    # start state management
 
     def _start_text_mode(self):
         while self._started:
@@ -348,6 +352,8 @@ class Kevin(PluginsMixin):
                     self._listen_speech(source)
             except KeyboardInterrupt:
                 self.stop()
+
+    # logs and assistant interface
 
     def _print_splash(self):
         if not self._rich_output:
@@ -405,6 +411,8 @@ class Kevin(PluginsMixin):
     def _log_assistant(self, text: str):
         self._log_rich("💡", text)
 
+    # public methods
+
     def start(self, *, verbose_logging: bool = False) -> None:
         """Starts the assistant.
 
@@ -424,13 +432,14 @@ class Kevin(PluginsMixin):
             raise RuntimeError("Assistant is already running")
         
         self._rich_output = not verbose_logging
-        self._print_splash()
 
         if verbose_logging:
             logging.basicConfig(level=logging.INFO)
 
         _log.info("KEVIN is starting")
+
         self._started = True
+        self._call_hook("assistant_start")
 
         if self.text_input_mode:
             self._start_text_mode()
@@ -450,8 +459,8 @@ class Kevin(PluginsMixin):
 
         _log.info("KEVIN is stopping")
 
-        self._log_rich("❌", "Exiting...")
         self._started = False
+        self._call_hook("assistant_stop")
 
     # convenience methods
 
@@ -588,7 +597,7 @@ class Kevin(PluginsMixin):
 
         return result
 
-    # Chat history management
+    # history management
 
     def purge_history(self) -> None:
         """Clears the message history of assistant."""
@@ -624,3 +633,106 @@ class Kevin(PluginsMixin):
         self._history.append(m)
 
         return m
+
+    # hooks
+
+    def _call_hook(self, hook: str, *args: Any) -> None:
+        default = getattr(self, f"hook_{hook}")
+        func, default_mode = self._hooks.get(hook, (None, "before"))
+
+        if default_mode == "before":
+            default(*args)
+        if func:
+            func(*args)
+        if default_mode == "after":
+            default(*args)
+
+    def register_hook(
+        self,
+        func: Callable[..., Any],
+        hook_name: str | None = None,
+        *,
+        call_default: str | None = "before"
+    ) -> None:
+        """Registers a hook callback.
+
+        If a callback is registered already for the given
+        hook, then it is overriden with the new callback.
+
+        Parameters
+        ----------
+        func:
+            The hook callback function.
+        hook_name: :class:`str` | None
+            The name of hook to bind the passed callback to. If not
+            provided, the name of callback function is treated as the
+            hook name.
+
+            If the hook name (or callback function name) begins with
+            `hook_`, then only the part after `hook_` is treated as
+            the hook name.
+        call_default: :class:`str` | None
+            The default hook calling mode. This can either be `before`,
+            `after`, or `None`.
+
+            Defaults to `before` such that the default implementation
+            of this hook is called before the given callback. If set
+            to `after`, the default hook is called after the callback.
+
+            Passing `None` prevents the default hook from being called
+            such that the new callback overrides the default hook.
+        """
+        if hook_name is None:
+            hook_name = func.__name__
+
+        if hook_name.startswith("hook_"):
+            hook_name = hook_name[5:]
+
+        self._hooks[hook_name] = (func, call_default)
+
+    def hook(
+        self,
+        func_or_name: Callable[..., Any] | str | None = None,
+        /,
+        *,
+        call_default: str | None = "before",
+    ):
+        """Decorator to register a hook.
+
+        This is a simple decorator interface for :meth:`.register_hook`
+        method and takes the same parameters.
+
+        Possible ways of using this decorator are:
+
+        - `@hook`
+        - `@hook("some_hook_name")`
+        - `@hook("some_hook_name", call_default="after")`
+        - `@hook(call_default="after")`
+        """
+        def __wrapper(func: Callable[..., Any]):
+            # func_or_name will always be the name in this scope
+            self.register_hook(func, hook_name=func_or_name, call_default=call_default)  # type: ignore
+            return func
+
+        # @hook - without paren
+        if inspect.isfunction(func_or_name):
+            self.register_hook(func_or_name)
+            return func_or_name
+        else:
+            return __wrapper  # @hook(...)
+
+    def hook_assistant_wake(self) -> None:
+        """Hook called when the assistant wakes (waker awake state is set)"""
+        self._log_rich("🎤", "Listening...", prepend_newline=True)
+
+    def hook_assistant_sleep(self) -> None:
+        """Hook called when the assistant sleeps (waker awake state is cleared)"""
+        self._log_rich("💤", "Sleeping...")
+    
+    def hook_assistant_start(self) -> None:
+        """Hook called when the assistant starts."""
+        self._print_splash()
+
+    def hook_assistant_stop(self) -> None:
+        """Hook called when the assistant is stopped."""
+        self._log_rich("❌", "Exiting...")
