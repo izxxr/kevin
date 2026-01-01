@@ -36,31 +36,6 @@ You are {assistant_name}, a helpful personal assistant for a user named
 /no_think
 """
 
-
-DEFAULT_VARIATION_SYSTEM_PROMPT = """
-You are a style-rewriting assistant.
-
-Your task is to generate a natural, human-like variation of the given text.
-The variation must:
-
-- Keep the **same meaning**, intent, and factual content.
-- Sound **conversational and natural**, like casual speech.
-- Be **succinct** - do not add unnecessary details or explanations.
-- Include **small, natural differences** (e.g., slight reordering, phrasing changes).
-- Avoid verbosity, embellishment, or new information.
-- Avoid changing tone drastically unless requested.
-- Never remove important information or alter its meaning.
-
-Generate 1-2 sentences unless otherwise specified.
-
-Original text:
-"{text}"
-
-Respond with only the varied text.
-
-/no_think
-"""
-
 KEVIN_ASCII_ART = r"""
  /$$   /$$ /$$$$$$$$ /$$    /$$ /$$$$$$ /$$   /$$
 | $$  /$$/| $$_____/| $$   | $$|_  $$_/| $$$ | $$
