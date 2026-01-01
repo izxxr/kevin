@@ -143,8 +143,6 @@ class Kevin(PluginsMixin):
         self.tts = tts
         self.waker = waker
         self.sleep_on_done = sleep_on_done
-        self.text_input_mode = stt is None
-        self.text_output_mode = tts is None
         self.listen_timeout = listen_timeout
         self.system_prompts = [Message(role="system", content=prompt) for prompt in system_prompts]
 
@@ -412,7 +410,7 @@ class Kevin(PluginsMixin):
 
         self._console.print()
         self._log_rich(
-            "🚀", f"Running in [yellow]{'💬 text' if self.text_input_mode else '🎤 speech'}[/yellow] mode",
+            "🚀", f"Running in [yellow]{'💬 text' if self.stt is None else '🎤 speech'}[/yellow] mode",
         )
 
     def _log_rich(
@@ -449,6 +447,12 @@ class Kevin(PluginsMixin):
     def _log_assistant(self, text: str):
         self._log_rich("💡", text)
 
+    # properties
+
+    @property
+    def text_mode(self) -> bool:
+        return self.stt is None
+
     # public methods
 
     def start(self, *, verbose_logging: bool = False) -> None:
@@ -479,7 +483,7 @@ class Kevin(PluginsMixin):
         self._started = True
         self._call_hook("assistant_start")
 
-        if self.text_input_mode:
+        if self.stt is None:
             self._start_text_mode()
         else:
             self._start_speech_mode()
@@ -582,7 +586,7 @@ class Kevin(PluginsMixin):
         """
         if prompt:
             self.say(prompt, blocking=blocking)
-        if listen and not self.text_input_mode:
+        if listen and not self.text_mode:
             assert self.microphone is not None, "microphone is not set"
 
             if self.microphone.stream is not None:
