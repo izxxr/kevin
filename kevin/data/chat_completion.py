@@ -21,10 +21,22 @@ class Message(BaseModel):
         The role from which the message is originating e.g. system or user.
     content: :class:`str`
         The message content.
+    extras: dict[:class:`str`, Any]
+        Additional data to include in message such as tool calls.
     """
 
     role: str
     content: str
+    extras: dict[str, Any] | None = Field(exclude=True, default=None)
+
+    def dump(self) -> dict[str, Any]:
+        """Returns the message data with any extras injected."""
+        data = self.model_dump()
+
+        if self.extras:
+            data.update(self.extras)
+
+        return data
 
 
 class ToolCall(BaseModel):

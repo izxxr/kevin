@@ -133,7 +133,7 @@ class HuggingFaceInferenceBackend(InferenceBackend):
             tools_data = [t.dump() for t in tools]
         
         options = {
-            "messages": [m.model_dump() for m in messages],
+            "messages": [m.dump() for m in messages],
             "tools": tools_data,
         }
 

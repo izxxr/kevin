@@ -618,7 +618,7 @@ class Kevin(PluginsMixin):
         """
         return self._history
 
-    def add_message_to_history(self, role: str, content: str) -> Message:
+    def add_message_to_history(self, role: str, content: str, extras: dict[str, Any] | None = None) -> Message:
         """Adds a message to assistant's chat history.
 
         Parameters
@@ -629,13 +629,15 @@ class Kevin(PluginsMixin):
             messages.
         content: :class:`str`
             The content of message to add.
+        extras: dict[:class:`str`, Any]
+            Additional data to include with message.
 
         Returns
         -------
         :class:`Message`
             The created message.
         """
-        m = Message(role=role, content=content)
+        m = Message(role=role, content=content, extras=extras)
         self._history.append(m)
 
         return m
