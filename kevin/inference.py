@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, TYPE_CHECKING
 from kevin.tools import Tool
-from kevin.data.chat_completion import (
-    Message,
-    ToolCall,
-    InferenceChatResponse
-)
+from kevin.data.chat_completion import Message, InferenceChatResponse
+from kevin.data.tools import tool_call_factory
+
+if TYPE_CHECKING:
+    from huggingface_hub import ChatCompletionOutput
 
 __all__ = (
     "InferenceBackend",
@@ -106,15 +106,12 @@ class HuggingFaceInferenceBackend(InferenceBackend):
 
         self.client = InferenceClient(**options)
 
-    def _make_chat_response(self, data: Any) -> InferenceChatResponse:
+    def _make_chat_response(self, data: ChatCompletionOutput) -> InferenceChatResponse:
         message = data.choices[0].message
         return InferenceChatResponse(
             content=message.content,
             tool_calls=[
-                ToolCall(
-                    arguments=call.function.arguments,
-                    name=call.function.name,
-                )
+                tool_call_factory(call)
                 for call in (message.tool_calls or [])
             ]
         )
@@ -140,5 +137,5 @@ class HuggingFaceInferenceBackend(InferenceBackend):
         if extra_options:
             options.update(extra_options)
 
-        data = self.client.chat_completion(**options)
+        data: ChatCompletionOutput = self.client.chat_completion(**options)
         return self._make_chat_response(data)

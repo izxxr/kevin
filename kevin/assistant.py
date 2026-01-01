@@ -9,6 +9,7 @@ from rich.rule import Rule
 
 from kevin import defs
 from kevin.data.chat_completion import Message, InferenceChatResponse
+from kevin.data.tools import FunctionCall
 from kevin.utils.plugins import PluginsMixin
 from kevin.tools.context import ToolCallContext
 
@@ -86,12 +87,12 @@ class Kevin(PluginsMixin):
     assistant_name: :class:`str`
         The custom name of assistant. Defaults to KEVIN. This is only formatted into
         default system prompt and disregarded when providing `include_default_prompt=False`.
-    user_name: :class:`str`
+    username: :class:`str`
         The name of user. Defaults to generic User. This is only formatted into
         default system prompt and disregarded when providing `include_default_prompt=False`.
     max_history_messages: :class:`int`
         The maximum messages to remember as history. This is exclusive of any system prompts and
-        only inclusive of the assistant/user messages. Default is 5.
+        includes assistant, user, or tool call messages. Default is 8.
     listen_timeout: :class:`float`
         The number of seconds to wait before sleeping if no speech is detected after waking up.
         Defaults to 10 seconds. Setting this to None removes timeout.
@@ -110,7 +111,7 @@ class Kevin(PluginsMixin):
         include_default_prompt: bool = True,
         assistant_name: str = "KEVIN",
         username: str = "<undefined>",
-        max_history_messages: int = 5,
+        max_history_messages: int = 8,
         listen_timeout: float | None = 5.0,
     ):
         if stt and not _sr_installed:
@@ -162,13 +163,13 @@ class Kevin(PluginsMixin):
 
     # internal helpers
 
-    def _get_messages(self, command: str):
-        msg = Message(role="user", content=command)
-        self._history.append(msg)
+    def _get_messages(self, command: str | None = None):
+        if command:
+            msg = Message(role="user", content=command)
+            self._history.append(msg)
 
         copy = self.system_prompts.copy()
         copy.extend(self._history)
-        copy.append(msg)
 
         return copy
  
@@ -194,25 +195,76 @@ class Kevin(PluginsMixin):
         response: InferenceChatResponse,
         tools: dict[str, type[Tool]] | None = None
     ) -> list[str]:
+        if not response.tool_calls:
+            return []
 
         if tools is None:
             tools = self._tools
 
         names: list[str] = []
+        tool_calls: list[dict[str, Any]] = []
+        tool_returns: list[Message] = []
 
         for call in response.tool_calls:
+            if not isinstance(call, FunctionCall):
+                _log.warning(f"Tool called ({call.id}) of type {call.type} is not supported.")
+                continue
+
+            names.append(call.name)
             try:
                 tool_tp = tools[call.name]
             except KeyError:
                 _log.warning("Inference response contains invalid tool name")
-            else:
-                tool = tool_tp(**call.arguments)
-                ctx = self._make_call_context(tool)
-                ctx._call()
+                continue
 
-            names.append(call.name)
+            tool = tool_tp(**call.arguments)
+            ctx = self._make_call_context(tool)
+            value = ctx._call()
+
+            if value:
+                tool_calls.append(call.dump())
+                tool_returns.append(Message(role="tool", content=value, extras={"name": call.name}))
+
+        if tool_returns:
+            self._history.append(Message(role="assistant", content="", extras={"tool_calls": tool_calls}))
+            self._history.extend(tool_returns)
+            self._infer_chat_completion()
 
         return names
+
+    def _handle_response(self, response: InferenceChatResponse) -> None:
+        _log.info("Response: %r", response.content)
+
+        if response.content:
+            self.add_message_to_history(role="assistant", content=response.content)
+            self._log_assistant(response.content)
+
+        if response.content and self.tts:
+            self.tts.speak(response.content)
+
+        called_names = self._call_tools_from_response(response)
+
+        if called_names and not response.content:
+            self._log_assistant(
+                f"[italic]Tool{'s' if len(called_names) > 2 else ''} Called: {', '.join(called_names)}[/italic]",
+            )
+
+    def _infer_chat_completion(
+        self,
+        command: str | None = None,
+        pass_tool_data: bool = True,
+    ) -> None:
+        kwargs: dict[str, Any] = {
+            "messages": self._get_messages(command),
+        }
+        if pass_tool_data:
+            kwargs["tool_data"] = self._get_tools_data()
+
+        response = self.inference.chat(
+            messages=self._get_messages(command),
+            tools_data=self._get_tools_data(),
+        )
+        self._handle_response(response)
 
     def process_command(self, command: str):
         """Processes the given command.
@@ -229,27 +281,7 @@ class Kevin(PluginsMixin):
             The command to process.
         """
         _log.info("Command: %r", command)
-
-        response = self.inference.chat(
-            messages=self._get_messages(command),
-            tools_data=self._get_tools_data(),
-        )
-
-        if response.content:
-            self._log_assistant(response.content)
-
-        _log.info("Response: %r", response.content)
-
-        if response.content and self.tts:
-            self.tts.speak(response.content)
-            self._history.append(Message(role="assistant", content=response.content))
-
-        called_names = self._call_tools_from_response(response)
-
-        if called_names and not response.content:
-            self._log_assistant(
-                f"[italic]Tool{'s' if len(called_names) > 2 else ''} Called: {', '.join(called_names)}[/italic]",
-            )
+        self._infer_chat_completion(command)
 
     # speech processing
 
@@ -573,6 +605,8 @@ class Kevin(PluginsMixin):
             text = self._read_input(return_input=True)
 
         assert text is not None, "_read_input() unexpectedly returned None"
+
+        self.add_message_to_history(role="user", content=text)
         return text
     
     def chat(

@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 from typing import Any
-from pydantic import BaseModel, Field, Json
+from pydantic import BaseModel, Field
+
+from kevin.data.tools import ToolCall
 
 __all__ = (
     "Message",
-    "ToolCall",
     "InferenceChatResponse",
 )
 
@@ -37,22 +38,6 @@ class Message(BaseModel):
             data.update(self.extras)
 
         return data
-
-
-class ToolCall(BaseModel):
-    """Represents a tool call from an chat inference response.
-
-    Attributes
-    ----------
-    name: :class:`str`
-        The name of tool that has been called.
-    arguments:
-        Mapping of supplied arguments. The key is argument name and value
-        is the argument value.
-    """
-
-    arguments: dict[str, Any] | Json[dict[str, Any]]
-    name: str
 
 
 class InferenceChatResponse(BaseModel):

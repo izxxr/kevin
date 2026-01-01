@@ -8,6 +8,8 @@ from functools import cached_property
 
 from kevin.tools.errors import ToolError
 
+import json
+
 if TYPE_CHECKING:
     from kevin.assistant import Kevin
     from kevin.tools.base import Tool
@@ -38,13 +40,22 @@ class ToolCallContext:
         # within a call context's lifecycle so caching this is fine.
         return MappingProxyType(self.tool.model_dump())
 
-    def _call(self) -> None:
+    def _call(self) -> str | None:
         try:
             self.tool.before_callback(self)
-            self.tool.callback(self)
+            value = self.tool.callback(self)
+
             self.tool.after_callback(self)
         except Exception as exc:
             if not isinstance(exc, ToolError):
                 exc = ToolError._from_exc(exc)
 
             self.tool.error_handler(self, exc)
+        else:
+            if value is not None:
+                if isinstance(value, (dict, list, bool)):
+                    value = json.dumps(value)
+                else:
+                    value = str(value)
+
+            return value

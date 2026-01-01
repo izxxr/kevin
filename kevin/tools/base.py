@@ -35,7 +35,7 @@ class Tool(BaseModel):
         """
         raise NotImplementedError("dump() must be defined by subclasses")
 
-    def callback(self, context: ToolCallContext, /):
+    def callback(self, context: ToolCallContext, /) -> Any:
         """Callback method for the tool.
 
         This is called when this tool is called by an LM.
@@ -46,7 +46,7 @@ class Tool(BaseModel):
             The context in which this tool was called.
         """
 
-    def before_callback(self, context: ToolCallContext, /):
+    def before_callback(self, context: ToolCallContext, /) -> None:
         """Hook method executed before calling :meth:`.callback`.
 
         Parameters
@@ -55,7 +55,7 @@ class Tool(BaseModel):
             The context in which this tool was called.
         """
 
-    def after_callback(self, context: ToolCallContext, /):
+    def after_callback(self, context: ToolCallContext, /) -> None:
         """Hook method executed after :meth:`.callback` is done executing.
 
         Parameters
@@ -64,7 +64,7 @@ class Tool(BaseModel):
             The context in which this tool was called.
         """
 
-    def error_handler(self, context: ToolCallContext, error: ToolError, /):
+    def error_handler(self, context: ToolCallContext, error: ToolError, /) -> None:
         """Local error handler for the tool.
 
         Any errors raised by :meth:`.before_callback`, :meth:`.after_callback`,
