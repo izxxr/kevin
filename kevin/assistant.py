@@ -252,15 +252,9 @@ class Kevin(PluginsMixin):
         command: str | None = None,
         pass_tool_data: bool = True,
     ) -> None:
-        kwargs: dict[str, Any] = {
-            "messages": self._get_messages(command),
-        }
-        if pass_tool_data:
-            kwargs["tool_data"] = self._get_tools_data()
-
         response = self.inference.chat(
             messages=self._get_messages(command),
-            tools_data=self._get_tools_data(),
+            tools_data=self._get_tools_data() if pass_tool_data else None,
         )
         self._handle_response(response)
 
