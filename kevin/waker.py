@@ -67,13 +67,19 @@ class Waker:
         """
         self.__awake.set()
 
-    def sleep(self) -> None:
+    def sleep(self) -> bool:
         """Clears the awake state.
 
         This is typically called by :class:`Kevin` when the assistant
         is going to sleep.
+
+        Returns true if awake state was cleared i.e. assistant has slept. If
+        assistant was already asleep, this returns false.
         """
+        was_set = self.__awake.is_set()
         self.__awake.clear()
+
+        return was_set
 
     def wait_until_awake(self, *, timeout: float | None = None) -> None:
         """Blocks until awake state is set.

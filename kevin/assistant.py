@@ -307,8 +307,8 @@ class Kevin(PluginsMixin):
         # background. For now, we are limited to require repeated wake up calls until a
         # feasible solution is available.
         if self.sleep_on_done and self.waker is not None:
-            self.waker.sleep()
-            self._call_hook("assistant_sleep")
+            if self.waker.sleep():
+                self._call_hook("assistant_sleep")
 
     def _awake(self) -> bool:
         return self.waker is not None and self.waker.awake()
@@ -339,8 +339,8 @@ class Kevin(PluginsMixin):
             if return_result:
                 raise TimeoutError("Timed out while waiting for speech input") from None
 
-            self.waker.sleep()  # type: ignore
-            self._call_hook("assistant_sleep")
+            if self.waker.sleep():  # type: ignore
+                self._call_hook("assistant_sleep")
         else:
             result = self._process_speech(speech, return_result=return_result)
 
