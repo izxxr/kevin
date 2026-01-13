@@ -4,10 +4,13 @@ from __future__ import annotations
 
 from typing import Any, TYPE_CHECKING
 from kevin.tools import Tool
-from kevin.data.chat_completion import Message, InferenceChatResponse
+from kevin.data.chat_completion import Message, InferenceChatResponse, SchemaT
 from kevin.data.tools import tool_call_factory
 
+import json
+
 if TYPE_CHECKING:
+    from pydantic import BaseModel
     from huggingface_hub import ChatCompletionOutput
 
 __all__ = (
@@ -32,8 +35,9 @@ class InferenceBackend:
         *,
         tools: list[type[Tool]] | None = None,
         tools_data: list[dict[str, Any]] | None = None,
+        model_cls: type[SchemaT] | None = None,
         extra_options: dict[str, Any] | None = None,
-    ) -> InferenceChatResponse:
+    ) -> InferenceChatResponse[SchemaT]:
         """Performs a chat completion inference.
 
         Parameters
@@ -50,6 +54,10 @@ class InferenceBackend:
             The serialized tools data. This exists as a "raw" version of ``tools`` parameter
             and may be supplied by :class:`Kevin` to prevent serialization of tool models on
             each call of this method.
+        model_cls: type[:class:`BaseModel`]
+            The Pydantic model class that the LLM should respond with. This is only usable
+            with models that support structured outputs. The returned model will be accessible
+            from :attr:`InferenceChatResponse.model` attribute.
         extra_options:
             Extra parameters passed to underlying inference client. 
 
@@ -106,15 +114,44 @@ class HuggingFaceInferenceBackend(InferenceBackend):
 
         self.client = InferenceClient(**options)
 
-    def _make_chat_response(self, data: ChatCompletionOutput) -> InferenceChatResponse:
+    def _make_chat_response(
+        self,
+        data: ChatCompletionOutput,
+        model_cls: type[SchemaT] | None = None,
+    ) -> InferenceChatResponse[SchemaT]:
         message = data.choices[0].message
+
+        if model_cls is not None:
+            if message.content is None:
+                raise ValueError("Chat completion unexpectedly return null content when model_cls was provided")
+
+            try:
+                data = json.loads(message.content)
+            except Exception:
+                raise ValueError("Returned content is not JSON serializable when model_cls was provided")
+            
+            model = model_cls(**data)
+        else:
+            model = None
+
         return InferenceChatResponse(
             content=message.content,
             tool_calls=[
                 tool_call_factory(call)
                 for call in (message.tool_calls or [])
-            ]
+            ],
+            model=model,
         )
+    
+    def _get_object_response_format(self, model_cls: type[BaseModel]) -> dict[str, Any]:
+        return {
+            "type": "json_schema",
+            "json_schema": {
+                "name": model_cls.__name__,
+                "schema": model_cls.model_json_schema(),
+                "strict": True,
+            }
+        }
 
     def chat(
         self,
@@ -122,8 +159,9 @@ class HuggingFaceInferenceBackend(InferenceBackend):
         *,
         tools: list[type[Tool]] | None = None,
         tools_data: list[dict[str, Any]] | None = None,
+        model_cls: type[SchemaT] | None = None,
         extra_options: dict[str, Any] | None = None,
-    ) -> InferenceChatResponse:
+    ) -> InferenceChatResponse[SchemaT]:
         if tools and tools_data:
             raise TypeError("tools and tools_data are mutually exclusive")
         if tools:
@@ -134,8 +172,11 @@ class HuggingFaceInferenceBackend(InferenceBackend):
             "tools": tools_data,
         }
 
+        if model_cls is not None:
+            options["response_format"] = self._get_object_response_format(model_cls)
+
         if extra_options:
             options.update(extra_options)
 
         data: ChatCompletionOutput = self.client.chat_completion(**options)
-        return self._make_chat_response(data)
+        return self._make_chat_response(data, model_cls=model_cls)

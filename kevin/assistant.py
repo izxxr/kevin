@@ -8,7 +8,7 @@ from rich.table import Table
 from rich.rule import Rule
 
 from kevin import defs
-from kevin.data.chat_completion import Message, InferenceChatResponse
+from kevin.data.chat_completion import Message
 from kevin.data.tools import FunctionCall
 from kevin.utils.plugins import PluginsMixin
 from kevin.tools.context import ToolCallContext
@@ -30,6 +30,7 @@ if TYPE_CHECKING:
     from kevin.inference import InferenceBackend, InferenceChatResponse
     from kevin.waker import Waker
     from kevin.tools.base import Tool
+    from kevin.data.chat_completion import SchemaT
 
     import speech_recognition as sr
 
@@ -190,7 +191,7 @@ class Kevin(PluginsMixin):
     
     def _call_tools_from_response(
         self,
-        response: InferenceChatResponse,
+        response: InferenceChatResponse[Any],
         tools: dict[str, type[Tool]] | None = None
     ) -> list[str]:
         if not response.tool_calls:
@@ -230,7 +231,7 @@ class Kevin(PluginsMixin):
 
         return names
 
-    def _handle_response(self, response: InferenceChatResponse) -> None:
+    def _handle_response(self, response: InferenceChatResponse[Any]) -> None:
         _log.info("Response: %r", response.content)
 
         if response.content:
@@ -613,8 +614,9 @@ class Kevin(PluginsMixin):
         *,
         tools: list[type[Tool]] | None = None,
         tools_data: list[dict[str, Any]] | None = None,
+        model_cls: type[SchemaT] | None = None,
         extra_options: dict[str, Any] | None = None,
-    ) -> InferenceChatResponse:
+    ) -> InferenceChatResponse[SchemaT]:
         """Performs chat completion inference on given messages.
 
         This method is similar to :meth:`InferenceBackend.chat` except
@@ -628,7 +630,13 @@ class Kevin(PluginsMixin):
         All parameters that this method takes are the same as :meth:`InferenceBackend.chat`
         and returns :class:`InferenceChatResponse`.
         """
-        result = self.inference.chat(messages, tools=tools, tools_data=tools_data, extra_options=extra_options)
+        result = self.inference.chat(
+            messages,
+            tools=tools,
+            tools_data=tools_data,
+            model_cls=model_cls,
+            extra_options=extra_options
+        )
 
         if tools and result.tool_calls:
             self._call_tools_from_response(result, tools={t.__tool_name__: t for t in tools})

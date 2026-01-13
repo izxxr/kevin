@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, TypeVar, Generic, Annotated
 from pydantic import BaseModel, Field
 
 from kevin.data.tools import ToolCall
@@ -11,6 +11,9 @@ __all__ = (
     "Message",
     "InferenceChatResponse",
 )
+
+
+SchemaT = TypeVar("SchemaT", bound=BaseModel)
 
 
 class Message(BaseModel):
@@ -40,7 +43,7 @@ class Message(BaseModel):
         return data
 
 
-class InferenceChatResponse(BaseModel):
+class InferenceChatResponse(BaseModel, Generic[SchemaT]):
     """Represents the response of a chat completion inference i.e. :meth:`InferenceBackend.chat`
 
     Attributes
@@ -49,7 +52,10 @@ class InferenceChatResponse(BaseModel):
         The content of chat inference, if there is any; otherwise None.
     tool_class: list[:class:`ToolCall`]
         The list of tools that were called.
+    model: :class:`BaseModel` | dict[:class:`str`, Any]
+        The Pydantic model returned as structured output by LLM.
     """
 
     content: str | None = None
+    model: Annotated[SchemaT | None, BaseModel] = Field(default=None)
     tool_calls: list[ToolCall] = Field(default_factory=list)
